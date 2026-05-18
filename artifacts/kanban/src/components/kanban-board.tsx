@@ -3,7 +3,7 @@ import { useBoardData, useUpdateTask } from "@/hooks/use-kanban";
 import { TaskModal } from "@/components/task-modal";
 import { format } from "date-fns";
 import { ru } from "date-fns/locale";
-import { Task, Column, Category } from "@/lib/types";
+import { Task } from "@/lib/types";
 
 export function KanbanBoard() {
   const { columns, categories, tasks, isLoading, error } = useBoardData();
@@ -42,12 +42,10 @@ export function KanbanBoard() {
   const grouped: Record<string, Task[]> = {};
   for (const col of columns) grouped[col.id] = [];
   for (const task of filteredTasks) {
-    if (grouped[task.board_column_id]) {
+    if (task.board_column_id && grouped[task.board_column_id]) {
       grouped[task.board_column_id].push(task);
     }
   }
-  console.log("[kanban] fetched tasks:", tasks.length, tasks);
-  console.log("[kanban] grouped by column:", grouped);
 
   const handleDragStart = (e: React.DragEvent, taskId: string) => {
     e.dataTransfer.setData("taskId", taskId);
@@ -63,6 +61,11 @@ export function KanbanBoard() {
     if (taskId) {
       updateTask.mutate({ id: taskId, board_column_id: columnId });
     }
+  };
+
+  const handleCardClick = (task: Task) => {
+    console.log("[kanban] selected task:", task);
+    setSelectedTask(task);
   };
 
   return (
@@ -129,7 +132,7 @@ export function KanbanBoard() {
                   </span>
                 </div>
 
-                <div className="flex-1 overflow-y-auto space-y-3 pb-2 custom-scrollbar">
+                <div className="flex-1 overflow-y-auto space-y-3 pb-2">
                   {columnTasks.length === 0 ? (
                     <div className="text-sm text-muted-foreground text-center py-8">
                       Нет задач
@@ -144,7 +147,7 @@ export function KanbanBoard() {
                           key={task.id}
                           draggable
                           onDragStart={(e) => handleDragStart(e, task.id)}
-                          onClick={() => setSelectedTask(task)}
+                          onClick={() => handleCardClick(task)}
                           className="group relative cursor-pointer rounded-md border bg-card p-3 shadow-sm hover:shadow transition-all hover:border-primary/30"
                         >
                           <div className="mb-2">
@@ -155,19 +158,26 @@ export function KanbanBoard() {
                             )}
                           </div>
                           <h4 className="text-sm font-medium text-card-foreground leading-snug">
-                            {task.title || task["исходный текст"] || "Без названия"}
+                            {task.title || "Без названия"}
                           </h4>
-                          {(task.description || task["описание"]) && (
+                          {task.description && (
                             <p className="mt-1 text-xs text-muted-foreground line-clamp-2">
-                              {task.description || task["описание"]}
+                              {task.description}
                             </p>
                           )}
                           {task.deadline && (
                             <div className="mt-3 text-xs text-muted-foreground flex items-center gap-1.5">
-                              <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><circle cx="12" cy="12" r="10"/><polyline points="12 6 12 12 16 14"/></svg>
-                              {format(new Date(task.deadline), "d MMM yyyy", {
-                                locale: ru,
-                              })}
+                              <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                                <circle cx="12" cy="12" r="10"/>
+                                <polyline points="12 6 12 12 16 14"/>
+                              </svg>
+                              {(() => {
+                                try {
+                                  return format(new Date(task.deadline), "d MMM yyyy", { locale: ru });
+                                } catch {
+                                  return task.deadline;
+                                }
+                              })()}
                             </div>
                           )}
                         </div>

@@ -1,4 +1,4 @@
-import { useState, useEffect } from "react";
+import { Component, type ReactNode, useState, useEffect } from "react";
 import { Task, Column, Category } from "@/lib/types";
 import { useUpdateTask, useDeleteTask } from "@/hooks/use-kanban";
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from "@/components/ui/dialog";
@@ -7,6 +7,41 @@ import { Input } from "@/components/ui/input";
 import { Textarea } from "@/components/ui/textarea";
 import { Label } from "@/components/ui/label";
 
+// ─── Error boundary ───────────────────────────────────────────────────────────
+class ModalErrorBoundary extends Component<
+  { children: ReactNode; onClose: () => void },
+  { hasError: boolean; message: string }
+> {
+  constructor(props: { children: ReactNode; onClose: () => void }) {
+    super(props);
+    this.state = { hasError: false, message: "" };
+  }
+  static getDerivedStateFromError(err: unknown) {
+    return { hasError: true, message: err instanceof Error ? err.message : String(err) };
+  }
+  render() {
+    if (this.state.hasError) {
+      return (
+        <Dialog open={true} onOpenChange={() => this.props.onClose()}>
+          <DialogContent className="sm:max-w-[400px]">
+            <DialogHeader>
+              <DialogTitle>Ошибка</DialogTitle>
+            </DialogHeader>
+            <p className="text-sm text-muted-foreground py-4">
+              Не удалось открыть задачу: {this.state.message}
+            </p>
+            <DialogFooter>
+              <Button onClick={this.props.onClose}>Закрыть</Button>
+            </DialogFooter>
+          </DialogContent>
+        </Dialog>
+      );
+    }
+    return this.props.children;
+  }
+}
+
+// ─── Modal body ───────────────────────────────────────────────────────────────
 interface TaskModalProps {
   task: Task;
   columns: Column[];
@@ -14,51 +49,50 @@ interface TaskModalProps {
   onClose: () => void;
 }
 
-export function TaskModal({ task, columns, categories, onClose }: TaskModalProps) {
+function safeDate(value: string | null | undefined): string {
+  if (!value) return "";
+  try {
+    return new Date(value).toISOString().split("T")[0];
+  } catch {
+    return "";
+  }
+}
+
+function TaskModalInner({ task, columns, categories, onClose }: TaskModalProps) {
   const updateTask = useUpdateTask();
   const deleteTask = useDeleteTask();
 
-  const [title, setTitle] = useState(task.title || task["исходный текст"] || "");
-  const [description, setDescription] = useState(task.description || task["описание"] || "");
-  const [categoryId, setCategoryId] = useState(task.category_id || "");
-  const [columnId, setColumnId] = useState(task.board_column_id);
-  const [deadline, setDeadline] = useState(
-    task.deadline ? new Date(task.deadline).toISOString().split("T")[0] : ""
-  );
+  const [title, setTitle] = useState(String(task.title ?? ""));
+  const [description, setDescription] = useState(String(task.description ?? ""));
+  const [categoryId, setCategoryId] = useState(String(task.category_id ?? ""));
+  const [columnId, setColumnId] = useState(String(task.board_column_id ?? ""));
+  const [deadline, setDeadline] = useState(safeDate(task.deadline));
 
   useEffect(() => {
-    setTitle(task.title || task["исходный текст"] || "");
-    setDescription(task.description || task["описание"] || "");
-    setCategoryId(task.category_id || "");
-    setColumnId(task.board_column_id);
-    setDeadline(task.deadline ? new Date(task.deadline).toISOString().split("T")[0] : "");
-  }, [task]);
+    setTitle(String(task.title ?? ""));
+    setDescription(String(task.description ?? ""));
+    setCategoryId(String(task.category_id ?? ""));
+    setColumnId(String(task.board_column_id ?? ""));
+    setDeadline(safeDate(task.deadline));
+  }, [task.id]);
 
   const handleSave = () => {
     updateTask.mutate(
       {
         id: task.id,
-        "исходный текст": title || null,
-        "описание": description || null,
+        title: title || undefined,
+        description: description || undefined,
         category_id: categoryId || null,
-        board_column_id: columnId,
+        board_column_id: columnId || undefined,
         deadline: deadline ? new Date(deadline).toISOString() : null,
       },
-      {
-        onSuccess: () => {
-          onClose();
-        },
-      }
+      { onSuccess: onClose },
     );
   };
 
   const handleDelete = () => {
     if (confirm("Вы уверены, что хотите удалить эту задачу?")) {
-      deleteTask.mutate(task.id, {
-        onSuccess: () => {
-          onClose();
-        },
-      });
+      deleteTask.mutate(task.id, { onSuccess: onClose });
     }
   };
 
@@ -114,6 +148,7 @@ export function TaskModal({ task, columns, categories, onClose }: TaskModalProps
                 value={columnId}
                 onChange={(e) => setColumnId(e.target.value)}
               >
+                <option value="">—</option>
                 {columns.map((c) => (
                   <option key={c.id} value={c.id}>
                     {c.name}
@@ -142,12 +177,24 @@ export function TaskModal({ task, columns, categories, onClose }: TaskModalProps
             <Button variant="outline" onClick={onClose}>
               Закрыть
             </Button>
-            <Button onClick={handleSave} disabled={updateTask.isPending || !(title || "").trim()}>
+            <Button
+              onClick={handleSave}
+              disabled={updateTask.isPending || !(title || "").trim()}
+            >
               Сохранить
             </Button>
           </div>
         </DialogFooter>
       </DialogContent>
     </Dialog>
+  );
+}
+
+// ─── Public export (wrapped in boundary) ─────────────────────────────────────
+export function TaskModal(props: TaskModalProps) {
+  return (
+    <ModalErrorBoundary onClose={props.onClose}>
+      <TaskModalInner {...props} />
+    </ModalErrorBoundary>
   );
 }

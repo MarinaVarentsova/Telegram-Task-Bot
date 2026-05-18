@@ -25,18 +25,35 @@ export function useBoardData() {
   const tasksQuery = useQuery({
     queryKey: ["tasks"],
     queryFn: async () => {
-      const raw = await api.tasks() as Task[];
+      const raw = await api.tasks() as Record<string, unknown>[];
       console.log("[kanban] fetched tasks (raw):", raw.length, raw);
+
       const mapped: Task[] = raw.map((t) => ({
-        ...t,
-        title:
-          (t as Task & { title?: string }).title ||
-          t["исходный текст"] ||
-          t["описание"] ||
-          "Без названия",
-        description: t["описание"] || "",
+        id: String(t["id"] ?? ""),
+        user_id: String(t["user_id"] ?? ""),
+        title: String(t["title"] ?? t["исходный текст"] ?? t["source_text"] ?? "Без названия"),
+        description: String(t["description"] ?? t["описание"] ?? ""),
+        source_text: t["source_text"] as string | null ?? null,
+        deadline: t["deadline"] as string | null ?? null,
+        board_column_id: String(t["board_column_id"] ?? ""),
+        category_id: t["category_id"] as string | null ?? null,
+        status: t["status"] as string | null ?? null,
+        priority: t["priority"] as string | null ?? null,
+        created_at: String(t["created_at"] ?? ""),
       }));
+
       console.log("[kanban] mapped tasks:", mapped);
+
+      const grouped: Record<string, Task[]> = {};
+      for (const task of mapped) {
+        const col = task.board_column_id;
+        if (col) {
+          if (!grouped[col]) grouped[col] = [];
+          grouped[col].push(task);
+        }
+      }
+      console.log("[kanban] grouped tasks by column:", grouped);
+
       return mapped;
     },
   });
