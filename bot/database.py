@@ -35,28 +35,36 @@ async def get_or_create_user(
     telegram_id: int,
     username: Optional[str],
     first_name: Optional[str],
-    last_name: Optional[str],
+    timezone: str = "Europe/Moscow",
 ) -> dict:
     """
     Получает пользователя по telegram_id или создаёт нового.
+    Вставляет только telegram_id, username, first_name, timezone.
     Возвращает запись из tg_users.
     """
     existing = await get_user_by_telegram_id(telegram_id)
     if existing:
         return existing
 
+    payload = {
+        "telegram_id": telegram_id,
+        "username": username,
+        "first_name": first_name,
+        "timezone": timezone,
+    }
+
     async with httpx.AsyncClient() as client:
         response = await client.post(
             f"{_base_url()}/tg_users",
             headers=_get_headers(),
-            json={
-                "telegram_id": telegram_id,
-                "username": username,
-                "first_name": first_name,
-                "last_name": last_name,
-            },
+            json=payload,
         )
-        response.raise_for_status()
+        if response.status_code >= 400:
+            logger.error(
+                f"Supabase вернул {response.status_code} при создании пользователя "
+                f"telegram_id={telegram_id}. Тело ответа: {response.text}"
+            )
+            response.raise_for_status()
         data = response.json()
         if not data:
             raise Exception("Пустой ответ при создании пользователя")

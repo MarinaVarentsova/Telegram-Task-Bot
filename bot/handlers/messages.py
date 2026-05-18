@@ -46,7 +46,6 @@ async def _get_or_register_user(message: Message) -> dict | None:
             telegram_id=user.id,
             username=user.username,
             first_name=user.first_name,
-            last_name=user.last_name,
         )
         logger.info(f"Автоматически зарегистрирован пользователь {user.id}")
     return db_user

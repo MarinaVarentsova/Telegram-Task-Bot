@@ -41,7 +41,6 @@ async def cmd_start(message: Message) -> None:
             telegram_id=user.id,
             username=user.username,
             first_name=user.first_name,
-            last_name=user.last_name,
         )
         name = user.first_name or user.username or "пользователь"
         await message.answer(
