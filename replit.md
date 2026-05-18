@@ -1,45 +1,65 @@
-# [Project name]
+# Telegram Task Management Bot
 
-_Replace the heading above with the project's name, and this line with one sentence describing what this app does for users._
+Telegram-бот для управления задачами с поддержкой голосовых сообщений и AI-обработкой текста.
 
 ## Run & Operate
 
-- `pnpm --filter @workspace/api-server run dev` — run the API server (port 5000)
-- `pnpm run typecheck` — full typecheck across all packages
-- `pnpm run build` — typecheck + build all packages
-- `pnpm --filter @workspace/api-spec run codegen` — regenerate API hooks and Zod schemas from the OpenAPI spec
-- `pnpm --filter @workspace/db run push` — push DB schema changes (dev only)
-- Required env: `DATABASE_URL` — Postgres connection string
+- `cd bot && python3 main.py` — запуск бота (polling mode)
+- Workflow **"Telegram Bot"** — автоматически запускает бота
 
 ## Stack
 
-- pnpm workspaces, Node.js 24, TypeScript 5.9
-- API: Express 5
-- DB: PostgreSQL + Drizzle ORM
-- Validation: Zod (`zod/v4`), `drizzle-zod`
-- API codegen: Orval (from OpenAPI spec)
-- Build: esbuild (CJS bundle)
+- Python 3.11
+- aiogram 3 — фреймворк для Telegram-ботов
+- Supabase — PostgreSQL база данных (REST API через httpx)
+- OpenAI (Replit AI) — транскрипция голоса и извлечение задач из текста
 
 ## Where things live
 
-_Populate as you build — short repo map plus pointers to the source-of-truth file for DB schema, API contracts, theme files, etc._
+- `bot/main.py` — точка входа, запуск polling
+- `bot/config.py` — конфигурация из переменных окружения
+- `bot/database.py` — все запросы к Supabase REST API
+- `bot/handlers/commands.py` — обработчики команд (/start, /tasks, /today и т.д.)
+- `bot/handlers/messages.py` — обработчик текстовых и голосовых сообщений
+- `bot/services/ai_service.py` — транскрипция и извлечение данных задачи через AI
+- `bot/services/task_service.py` — бизнес-логика создания задач
 
 ## Architecture decisions
 
-_Populate as you build — non-obvious choices a reader couldn't infer from the code (3-5 bullets)._
+- Supabase REST API напрямую через `httpx` (избегает проблем с JWT-валидацией в supabase-py)
+- AI-клиент создаётся лениво при каждом вызове (lazy init) — env vars читаются в runtime
+- Номера задач в командах (/done, /move, /tag) — порядковые номера из списка активных задач
+- Голосовые сообщения транскрибируются через `gpt-4o-mini-transcribe`, данные извлекаются через `gpt-5-mini`
+- Всё в polling mode (MVP), без вебхуков
 
 ## Product
 
-_Describe the high-level user-facing capabilities of this app once they exist._
+- Пользователь отправляет текст или голос → бот создаёт задачу в Supabase
+- AI автоматически извлекает: заголовок, описание, дедлайн, категорию
+- Задачи организованы по колонкам Kanban-доски (бэклог, сегодня, выполнено и др.)
+- Команды для управления: просмотр, перемещение, смена категории, отметка выполненной
 
 ## User preferences
 
-_Populate as you build — explicit user instructions worth remembering across sessions._
+- Все тексты и интерфейс на русском языке
+- Архитектура простая, без фронтенда — только backend polling bot
 
 ## Gotchas
 
-_Populate as you build — sharp edges, "always run X before Y" rules._
+- Supabase REST API фильтры: `ilike.{name}` для поиска без учёта регистра
+- Replit AI env vars (`AI_INTEGRATIONS_OPENAI_BASE_URL`, `AI_INTEGRATIONS_OPENAI_API_KEY`) устанавливаются автоматически через интеграцию
+- При добавлении новых секретов — перезапустить workflow "Telegram Bot"
+- Голосовые сообщения Telegram приходят в формате OGG/Opus
+
+## Required env vars / secrets
+
+- `TELEGRAM_BOT_TOKEN` — токен от @BotFather
+- `SUPABASE_URL` — URL Supabase проекта
+- `SUPABASE_SERVICE_ROLE_KEY` — service role ключ
+- `AI_INTEGRATIONS_OPENAI_BASE_URL` — Replit AI (авто)
+- `AI_INTEGRATIONS_OPENAI_API_KEY` — Replit AI (авто)
 
 ## Pointers
 
-- See the `pnpm-workspace` skill for workspace structure, TypeScript setup, and package details
+- `bot/README.md` — документация на русском языке
+- `bot/.env.example` — пример переменных окружения для локальной разработки
