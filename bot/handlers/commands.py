@@ -50,9 +50,9 @@ async def cmd_start(message: Message) -> None:
             "📋 Команды:\n"
             "/tasks — все активные задачи\n"
             "/today — задачи на сегодня\n"
-            "/done <номер> — отметить задачу выполненной\n"
-            "/move <номер> <колонка> — переместить задачу\n"
-            "/tag <номер> <категория> — изменить категорию\n"
+            "/done [номер] — отметить задачу выполненной\n"
+            "/move [номер] [колонка] — переместить задачу\n"
+            "/tag [номер] [категория] — изменить категорию\n"
             "/categories — список категорий\n"
             "/columns — список колонок"
         )
@@ -127,7 +127,7 @@ async def cmd_done(message: Message, command: CommandObject) -> None:
         return
 
     if not command.args:
-        await message.answer("Использование: /done <номер задачи>\nПример: /done 3")
+        await message.answer("Использование: /done [номер задачи]\nПример: /done 3")
         return
 
     try:
@@ -216,7 +216,7 @@ async def cmd_move(message: Message, command: CommandObject) -> None:
 
     if not command.args:
         await message.answer(
-            "Использование: /move <номер задачи> <название колонки>\n"
+            "Использование: /move [номер задачи] [название колонки]\n"
             "Пример: /move 2 сегодня"
         )
         return
@@ -279,7 +279,7 @@ async def cmd_tag(message: Message, command: CommandObject) -> None:
 
     if not command.args:
         await message.answer(
-            "Использование: /tag <номер задачи> <название категории>\n"
+            "Использование: /tag [номер задачи] [название категории]\n"
             "Пример: /tag 1 работа"
         )
         return
