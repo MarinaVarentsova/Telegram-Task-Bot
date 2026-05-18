@@ -6,17 +6,36 @@ import { toast } from "sonner";
 export function useBoardData() {
   const columnsQuery = useQuery({
     queryKey: ["columns"],
-    queryFn: () => api.columns() as Promise<Column[]>,
+    queryFn: async () => {
+      const data = await api.columns() as Column[];
+      console.log("[kanban] fetched columns:", data.length, data);
+      return data;
+    },
   });
 
   const categoriesQuery = useQuery({
     queryKey: ["categories"],
-    queryFn: () => api.categories() as Promise<Category[]>,
+    queryFn: async () => {
+      const data = await api.categories() as Category[];
+      console.log("[kanban] fetched categories:", data.length, data);
+      return data;
+    },
   });
 
   const tasksQuery = useQuery({
     queryKey: ["tasks"],
-    queryFn: () => api.tasks() as Promise<Task[]>,
+    queryFn: async () => {
+      const raw = await api.tasks() as Task[];
+      console.log("[kanban] fetched tasks (raw):", raw.length, raw);
+      const mapped = raw.map((t) => ({
+        ...t,
+        _title: t["исходный текст"],
+        _desc: t["описание"],
+        _col: t.board_column_id,
+      }));
+      console.log("[kanban] mapped tasks:", mapped);
+      return raw;
+    },
   });
 
   const usersQuery = useQuery({

@@ -29,17 +29,25 @@ export function KanbanBoard() {
     );
   }
 
-  const doneColumn = columns.find((c) => c.name.toLowerCase() === "выполнено");
-
   const filteredTasks = tasks.filter((task) => {
     if (selectedCategory && task.category_id !== selectedCategory) return false;
-    if (selectedColumn && task.column_id !== selectedColumn) return false;
+    if (selectedColumn && task.board_column_id !== selectedColumn) return false;
     return true;
   });
 
   const columnsToDisplay = selectedColumn
     ? columns.filter((c) => c.id === selectedColumn)
     : columns;
+
+  const grouped: Record<string, Task[]> = {};
+  for (const col of columns) grouped[col.id] = [];
+  for (const task of filteredTasks) {
+    if (grouped[task.board_column_id]) {
+      grouped[task.board_column_id].push(task);
+    }
+  }
+  console.log("[kanban] fetched tasks:", tasks.length, tasks);
+  console.log("[kanban] grouped by column:", grouped);
 
   const handleDragStart = (e: React.DragEvent, taskId: string) => {
     e.dataTransfer.setData("taskId", taskId);
@@ -53,7 +61,7 @@ export function KanbanBoard() {
     e.preventDefault();
     const taskId = e.dataTransfer.getData("taskId");
     if (taskId) {
-      updateTask.mutate({ id: taskId, column_id: columnId });
+      updateTask.mutate({ id: taskId, board_column_id: columnId });
     }
   };
 
@@ -103,9 +111,7 @@ export function KanbanBoard() {
       <main className="flex-1 overflow-x-auto overflow-y-hidden p-6">
         <div className="flex h-full items-start gap-6">
           {columnsToDisplay.map((column) => {
-            const columnTasks = filteredTasks.filter(
-              (t) => t.column_id === column.id
-            );
+            const columnTasks = grouped[column.id] ?? [];
 
             return (
               <div
@@ -149,8 +155,13 @@ export function KanbanBoard() {
                             )}
                           </div>
                           <h4 className="text-sm font-medium text-card-foreground leading-snug">
-                            {task.title}
+                            {task["исходный текст"]}
                           </h4>
+                          {task["описание"] && (
+                            <p className="mt-1 text-xs text-muted-foreground line-clamp-2">
+                              {task["описание"]}
+                            </p>
+                          )}
                           {task.deadline && (
                             <div className="mt-3 text-xs text-muted-foreground flex items-center gap-1.5">
                               <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><circle cx="12" cy="12" r="10"/><polyline points="12 6 12 12 16 14"/></svg>

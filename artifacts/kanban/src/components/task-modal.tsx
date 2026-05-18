@@ -18,19 +18,19 @@ export function TaskModal({ task, columns, categories, onClose }: TaskModalProps
   const updateTask = useUpdateTask();
   const deleteTask = useDeleteTask();
 
-  const [title, setTitle] = useState(task.title);
-  const [description, setDescription] = useState(task.description || "");
+  const [title, setTitle] = useState(task["исходный текст"]);
+  const [description, setDescription] = useState(task["описание"] || "");
   const [categoryId, setCategoryId] = useState(task.category_id || "");
-  const [columnId, setColumnId] = useState(task.column_id);
+  const [columnId, setColumnId] = useState(task.board_column_id);
   const [deadline, setDeadline] = useState(
     task.deadline ? new Date(task.deadline).toISOString().split("T")[0] : ""
   );
 
   useEffect(() => {
-    setTitle(task.title);
-    setDescription(task.description || "");
+    setTitle(task["исходный текст"]);
+    setDescription(task["описание"] || "");
     setCategoryId(task.category_id || "");
-    setColumnId(task.column_id);
+    setColumnId(task.board_column_id);
     setDeadline(task.deadline ? new Date(task.deadline).toISOString().split("T")[0] : "");
   }, [task]);
 
@@ -38,10 +38,10 @@ export function TaskModal({ task, columns, categories, onClose }: TaskModalProps
     updateTask.mutate(
       {
         id: task.id,
-        title,
-        description: description || null,
+        "исходный текст": title,
+        "описание": description || null,
         category_id: categoryId || null,
-        column_id: columnId,
+        board_column_id: columnId,
         deadline: deadline ? new Date(deadline).toISOString() : null,
       },
       {
@@ -77,7 +77,7 @@ export function TaskModal({ task, columns, categories, onClose }: TaskModalProps
               onChange={(e) => setTitle(e.target.value)}
             />
           </div>
-          
+
           <div className="grid gap-2">
             <Label htmlFor="description">Описание</Label>
             <Textarea
@@ -133,7 +133,7 @@ export function TaskModal({ task, columns, categories, onClose }: TaskModalProps
             />
           </div>
         </div>
-        
+
         <DialogFooter className="flex justify-between sm:justify-between">
           <Button variant="destructive" onClick={handleDelete} disabled={deleteTask.isPending}>
             Удалить
