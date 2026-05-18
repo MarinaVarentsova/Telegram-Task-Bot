@@ -22,6 +22,9 @@ def _require(key: str) -> str:
 # Telegram — читается один раз при старте
 TELEGRAM_BOT_TOKEN: str = _require("TELEGRAM_BOT_TOKEN")
 
+# URL веб-приложения (бэклог). Необязательный — если не задан, кнопка сообщает об этом.
+APP_URL: str = os.getenv("APP_URL", "").strip()
+
 # Модели AI
 TRANSCRIPTION_MODEL: str = "gpt-4o-mini-transcribe"
 EXTRACTION_MODEL: str = "gpt-5-mini"
