@@ -27,14 +27,17 @@ export function useBoardData() {
     queryFn: async () => {
       const raw = await api.tasks() as Task[];
       console.log("[kanban] fetched tasks (raw):", raw.length, raw);
-      const mapped = raw.map((t) => ({
+      const mapped: Task[] = raw.map((t) => ({
         ...t,
-        _title: t["исходный текст"],
-        _desc: t["описание"],
-        _col: t.board_column_id,
+        title:
+          (t as Task & { title?: string }).title ||
+          t["исходный текст"] ||
+          t["описание"] ||
+          "Без названия",
+        description: t["описание"] || "",
       }));
       console.log("[kanban] mapped tasks:", mapped);
-      return raw;
+      return mapped;
     },
   });
 

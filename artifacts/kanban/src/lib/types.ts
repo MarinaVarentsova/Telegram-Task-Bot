@@ -12,8 +12,10 @@ export interface Category {
 export interface Task {
   id: string;
   user_id: string;
-  "исходный текст": string;
+  "исходный текст": string | null;
   "описание": string | null;
+  title?: string;
+  description?: string;
   deadline: string | null;
   board_column_id: string;
   category_id: string | null;

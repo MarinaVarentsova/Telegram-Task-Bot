@@ -18,8 +18,8 @@ export function TaskModal({ task, columns, categories, onClose }: TaskModalProps
   const updateTask = useUpdateTask();
   const deleteTask = useDeleteTask();
 
-  const [title, setTitle] = useState(task["исходный текст"]);
-  const [description, setDescription] = useState(task["описание"] || "");
+  const [title, setTitle] = useState(task.title || task["исходный текст"] || "");
+  const [description, setDescription] = useState(task.description || task["описание"] || "");
   const [categoryId, setCategoryId] = useState(task.category_id || "");
   const [columnId, setColumnId] = useState(task.board_column_id);
   const [deadline, setDeadline] = useState(
@@ -27,8 +27,8 @@ export function TaskModal({ task, columns, categories, onClose }: TaskModalProps
   );
 
   useEffect(() => {
-    setTitle(task["исходный текст"]);
-    setDescription(task["описание"] || "");
+    setTitle(task.title || task["исходный текст"] || "");
+    setDescription(task.description || task["описание"] || "");
     setCategoryId(task.category_id || "");
     setColumnId(task.board_column_id);
     setDeadline(task.deadline ? new Date(task.deadline).toISOString().split("T")[0] : "");
@@ -38,7 +38,7 @@ export function TaskModal({ task, columns, categories, onClose }: TaskModalProps
     updateTask.mutate(
       {
         id: task.id,
-        "исходный текст": title,
+        "исходный текст": title || null,
         "описание": description || null,
         category_id: categoryId || null,
         board_column_id: columnId,
@@ -142,7 +142,7 @@ export function TaskModal({ task, columns, categories, onClose }: TaskModalProps
             <Button variant="outline" onClick={onClose}>
               Закрыть
             </Button>
-            <Button onClick={handleSave} disabled={updateTask.isPending || !title.trim()}>
+            <Button onClick={handleSave} disabled={updateTask.isPending || !(title || "").trim()}>
               Сохранить
             </Button>
           </div>

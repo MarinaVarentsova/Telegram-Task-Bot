@@ -155,11 +155,11 @@ export function KanbanBoard() {
                             )}
                           </div>
                           <h4 className="text-sm font-medium text-card-foreground leading-snug">
-                            {task["исходный текст"]}
+                            {task.title || task["исходный текст"] || "Без названия"}
                           </h4>
-                          {task["описание"] && (
+                          {(task.description || task["описание"]) && (
                             <p className="mt-1 text-xs text-muted-foreground line-clamp-2">
-                              {task["описание"]}
+                              {task.description || task["описание"]}
                             </p>
                           )}
                           {task.deadline && (
