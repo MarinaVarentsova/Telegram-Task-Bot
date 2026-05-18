@@ -1,0 +1,99 @@
+Build a Telegram task management bot using Python.
+
+Stack:
+
+* Python
+* aiogram 3
+* Supabase
+
+Important:
+
+* Supabase tables already exist.
+* DO NOT create new tables.
+* DO NOT modify database schema.
+* Use only existing tables:
+
+  * tg_users
+  * tg_tasks
+  * tg_categories
+  * tg_board_columns
+
+Environment variables:
+
+* TELEGRAM_BOT_TOKEN
+* SUPABASE_URL
+* SUPABASE_SERVICE_ROLE_KEY
+
+Main logic:
+
+1. User sends a text or voice message to the Telegram bot.
+
+2. If the message is voice:
+
+* download Telegram voice file
+* convert voice to text using available Replit AI capabilities or local transcription libraries for MVP
+
+3. From the final text extract:
+
+* title = short task title in Russian, max 80 chars
+* description = full structured task description in Russian
+* deadline if user mentioned date/time
+* category based on existing categories
+* board column default = "бэклог"
+
+4. Save task into tg_tasks:
+
+* title is required
+* description is required
+* source_text = original user message
+* user_id from tg_users
+* category_id from tg_categories
+* board_column_id from tg_board_columns
+* deadline
+* reminder_sent = false
+* status = active
+* priority = normal
+
+5. If category is not recognized:
+
+* use category "прочее"
+
+6. If board column is not specified:
+
+* use "бэклог"
+
+Bot commands:
+
+* /start — register user in tg_users
+* /tasks — show active tasks grouped by board column
+* /today — show tasks from column "сегодня"
+* /done <task_number> — move task to column "выполнено"
+* /categories — show categories
+* /columns — show board columns
+* /move <task_number> <column_name> — move task to another column
+* /tag <task_number> <category_name> — change category
+
+Task display format:
+[ID] Title
+Category: ...
+Column: ...
+Deadline: ...
+Description: ...
+
+Need:
+
+* clean project structure
+* requirements.txt
+* README.md
+* .env.example
+* logging
+* error handling
+* polling mode for MVP
+* comments in code
+
+Important:
+
+* keep architecture simple for MVP
+* no frontend needed
+* backend only
+* all text in Russian
