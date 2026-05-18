@@ -10,6 +10,7 @@ from aiogram import Bot, Dispatcher
 from aiogram.client.default import DefaultBotProperties
 from aiogram.enums import ParseMode
 from config import TELEGRAM_BOT_TOKEN
+from database import log_startup_check
 from handlers import commands, messages
 
 
@@ -34,6 +35,7 @@ async def main() -> None:
     logger = logging.getLogger(__name__)
 
     logger.info("Запуск Telegram-бота для управления задачами...")
+    log_startup_check()
 
     # Создаём бота и диспетчер
     bot = Bot(

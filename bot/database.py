@@ -12,21 +12,45 @@ from typing import Optional
 logger = logging.getLogger(__name__)
 
 
-def _get_headers() -> dict:
-    """Возвращает заголовки авторизации для Supabase REST API."""
-    key = os.environ["SUPABASE_SERVICE_ROLE_KEY"]
+def _service_role_key() -> str:
+    """
+    Читает service role ключ из окружения.
+    Вызов strip() защищает от пробелов/переносов строк в значении секрета.
+    """
+    key = os.environ["SUPABASE_SERVICE_ROLE_KEY"].strip()
+    if not key:
+        raise EnvironmentError("SUPABASE_SERVICE_ROLE_KEY пустой")
+    return key
+
+
+def _get_headers(prefer: str = "return=representation") -> dict:
+    """
+    Возвращает заголовки авторизации для Supabase REST API.
+    Всегда использует service role ключ — обходит RLS.
+    """
+    key = _service_role_key()
     return {
         "apikey": key,
         "Authorization": f"Bearer {key}",
         "Content-Type": "application/json",
-        "Prefer": "return=representation",
+        "Prefer": prefer,
     }
 
 
 def _base_url() -> str:
     """Возвращает базовый URL Supabase REST API."""
-    url = os.environ["SUPABASE_URL"].rstrip("/")
+    url = os.environ["SUPABASE_URL"].strip().rstrip("/")
     return f"{url}/rest/v1"
+
+
+def log_startup_check() -> None:
+    """Логирует диагностику подключения при старте (без значений секретов)."""
+    key = _service_role_key()
+    url = os.environ["SUPABASE_URL"].strip()
+    logger.info(
+        f"Supabase: url={url}, service_role_key длина={len(key)} символов, "
+        f"начинается с '{key[:6]}...'"
+    )
 
 
 # ─── Пользователи ─────────────────────────────────────────────────────────────
@@ -185,7 +209,7 @@ async def get_active_tasks_by_user(user_id: int) -> list[dict]:
     async with httpx.AsyncClient() as client:
         response = await client.get(
             f"{_base_url()}/tg_tasks",
-            headers={**_get_headers(), "Prefer": ""},
+            headers=_get_headers(prefer=""),
             params={
                 "user_id": f"eq.{user_id}",
                 "status": "eq.active",
@@ -206,7 +230,7 @@ async def get_tasks_by_column(user_id: int, column_name: str) -> list[dict]:
     async with httpx.AsyncClient() as client:
         response = await client.get(
             f"{_base_url()}/tg_tasks",
-            headers={**_get_headers(), "Prefer": ""},
+            headers=_get_headers(prefer=""),
             params={
                 "user_id": f"eq.{user_id}",
                 "board_column_id": f"eq.{column['id']}",
@@ -235,7 +259,7 @@ async def move_task_to_column(task_id: int, column_id: int) -> bool:
     async with httpx.AsyncClient() as client:
         response = await client.patch(
             f"{_base_url()}/tg_tasks",
-            headers={**_get_headers(), "Prefer": ""},
+            headers=_get_headers(prefer=""),
             params={"id": f"eq.{task_id}"},
             json={"board_column_id": column_id},
         )
@@ -249,7 +273,7 @@ async def change_task_category(task_id: int, category_id: int) -> bool:
     async with httpx.AsyncClient() as client:
         response = await client.patch(
             f"{_base_url()}/tg_tasks",
-            headers={**_get_headers(), "Prefer": ""},
+            headers=_get_headers(prefer=""),
             params={"id": f"eq.{task_id}"},
             json={"category_id": category_id},
         )
