@@ -75,16 +75,15 @@ async def handle_text_message(message: Message) -> None:
             text=message.text,
         )
 
-        await processing_msg.edit_text(
+        await processing_msg.delete()
+        await message.answer(
             "✅ Задача создана и добавлена в бэклог.",
             reply_markup=main_keyboard(),
         )
 
     except Exception as e:
         logger.error(f"Ошибка обработки текста от {user.id}: {e}")
-        await processing_msg.edit_text(
-            "❌ Не удалось сохранить задачу. Попробуйте позже."
-        )
+        await processing_msg.edit_text("❌ Не удалось сохранить задачу. Попробуйте позже.")
 
 
 # ─── Голосовые сообщения → задача ─────────────────────────────────────────────
@@ -114,13 +113,12 @@ async def handle_voice_message(message: Message, bot: Bot) -> None:
             file_format="ogg",
         )
 
-        await processing_msg.edit_text(
+        await processing_msg.delete()
+        await message.answer(
             "✅ Задача создана и добавлена в бэклог.",
             reply_markup=main_keyboard(),
         )
 
     except Exception as e:
         logger.error(f"Ошибка обработки голоса от {user.id}: {e}")
-        await processing_msg.edit_text(
-            "❌ Не удалось распознать или сохранить задачу. Попробуйте ещё раз."
-        )
+        await processing_msg.edit_text("❌ Не удалось распознать или сохранить задачу. Попробуйте ещё раз.")
