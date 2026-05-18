@@ -1,0 +1,166 @@
+Build a clean and modern Kanban backlog web application for the Telegram task bot.
+
+Stack:
+
+* React
+* TypeScript
+* Vite
+* Tailwind CSS
+* Supabase
+
+Use existing Supabase tables only:
+
+* tg_tasks
+* tg_categories
+* tg_board_columns
+* tg_users
+
+Important:
+
+* DO NOT create new tables
+* DO NOT modify database schema
+* DO NOT generate mock/demo data
+* Use real Supabase data only
+
+Environment variables:
+
+* SUPABASE_URL
+* SUPABASE_SERVICE_ROLE_KEY
+
+Application purpose:
+This is a lightweight productivity backlog board.
+Telegram bot is only used to create tasks.
+All task management should happen inside this web application.
+
+UI/UX requirements:
+
+STYLE:
+
+* calm
+* modern
+* minimal
+* clean productivity aesthetic
+* soft neutral colors
+* slightly pastel accents
+* elegant but not flashy
+* comfortable for long work sessions
+* no bright neon colors
+* no gamer/dashboard style
+* similar feeling to Linear / Notion / Trello hybrid
+
+LAYOUT:
+
+* horizontal Kanban board
+* columns displayed side by side
+* smooth scrolling
+* responsive design
+* optimized for desktop first
+* mobile adaptive
+
+BOARD COLUMNS:
+Load columns dynamically from tg_board_columns.
+Sort columns by sort_order.
+
+TASK CARDS:
+Each card should display ONLY:
+
+* task title
+* category/tag
+* deadline (if exists)
+
+Do NOT display description preview on cards.
+
+Card design:
+
+* compact
+* rounded corners
+* soft shadow
+* category badge
+* subtle hover animation
+* clean spacing
+
+TASK DETAILS:
+When user clicks a card:
+Open modal window or side panel.
+
+Inside modal show:
+
+* title
+* full description
+* category
+* column
+* deadline
+
+Inside modal allow editing:
+
+* title
+* description
+* category
+* deadline
+* board column
+
+Buttons:
+
+* Save
+* Delete
+* Close
+
+TASK ACTIONS:
+
+* move task between columns
+* drag and drop support preferred
+* fallback: move dropdown if drag&drop is unstable
+* update Supabase immediately after changes
+
+FILTERS:
+Top toolbar should contain:
+
+* category filter
+* column filter
+* reset filters button
+
+DATA:
+Load all data from Supabase:
+
+* tasks from tg_tasks
+* categories from tg_categories
+* columns from tg_board_columns
+
+Join category names and column names correctly.
+
+DEFAULT VIEW:
+
+* active tasks only
+* completed tasks only inside "выполнено" column
+
+RUSSIAN INTERFACE:
+All UI text should be in Russian.
+
+DESIGN DETAILS:
+
+* beautiful typography
+* comfortable spacing
+* smooth transitions
+* clean task management feeling
+* professional productivity app vibe
+* no clutter
+* no giant borders
+* no oversized buttons
+
+TECH REQUIREMENTS:
+
+* clean component structure
+* reusable components
+* loading states
+* empty states
+* error handling
+* modular architecture
+
+Need:
+
+* README.md
+* .env.example
+* clear setup instructions
+* production-ready frontend structure
+
+The result should feel like a real modern productivity tool, not an admin panel template.

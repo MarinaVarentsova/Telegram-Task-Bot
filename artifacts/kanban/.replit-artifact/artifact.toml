@@ -1,0 +1,31 @@
+kind = "web"
+previewPath = "/"
+title = "Kanban Board"
+version = "1.0.0"
+id = "artifacts/kanban"
+router = "path"
+
+[[integratedSkills]]
+name = "react-vite"
+version = "1.0.0"
+
+[[services]]
+name = "web"
+paths = [ "/" ]
+localPort = 18929
+
+[services.development]
+run = "pnpm --filter @workspace/kanban run dev"
+
+[services.production]
+build = [ "pnpm", "--filter", "@workspace/kanban", "run", "build" ]
+publicDir = "artifacts/kanban/dist/public"
+serve = "static"
+
+[[services.production.rewrites]]
+from = "/*"
+to = "/index.html"
+
+[services.env]
+PORT = "18929"
+BASE_PATH = "/"
