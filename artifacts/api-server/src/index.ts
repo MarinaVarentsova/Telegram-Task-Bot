@@ -1,5 +1,3 @@
-import { spawn } from "child_process";
-import path from "path";
 import app from "./app";
 import { logger } from "./lib/logger";
 
@@ -23,39 +21,40 @@ app.listen(port, (err) => {
     process.exit(1);
   }
 
+  const BOT_MODE = process.env["BOT_MODE"] ?? "not set";
+  const WEBHOOK_URL = process.env["WEBHOOK_URL"] ?? "not set";
+  const INTERNAL_PORT = process.env["WEBHOOK_INTERNAL_PORT"] ?? "8082";
+
   logger.info({ port }, "Server listening");
+  logger.info(
+    { BOT_MODE, WEBHOOK_URL, pythonBotInternalPort: INTERNAL_PORT },
+    "Bot configuration",
+  );
 
-  // In production + webhook mode, spawn the Python bot as a child process.
-  // The workspace "Telegram Bot" workflow handles dev/polling mode separately.
-  const BOT_MODE = process.env["BOT_MODE"];
-  const isProduction = process.env["NODE_ENV"] === "production";
-
-  if (BOT_MODE === "webhook" && isProduction) {
-    const workspaceRoot = path.resolve(process.cwd());
-    const botScript = path.join(workspaceRoot, "bot", "main.py");
-
-    logger.info({ botScript }, "Starting Python bot process (webhook mode)");
-
-    const botProcess = spawn("python3", [botScript], {
-      cwd: workspaceRoot,
-      env: process.env,
-      stdio: ["ignore", "pipe", "pipe"],
-    });
-
-    botProcess.stdout?.on("data", (data: Buffer) => {
-      process.stdout.write(data);
-    });
-
-    botProcess.stderr?.on("data", (data: Buffer) => {
-      process.stderr.write(data);
-    });
-
-    botProcess.on("error", (err: Error) => {
-      logger.error({ err }, "Bot process failed to start");
-    });
-
-    botProcess.on("exit", (code: number | null, signal: string | null) => {
-      logger.warn({ code, signal }, "Bot process exited unexpectedly");
-    });
+  // After startup, fetch Telegram webhook info and log it for production diagnostics
+  if (BOT_MODE === "webhook") {
+    setTimeout(async () => {
+      const token = process.env["TELEGRAM_BOT_TOKEN"];
+      if (!token) {
+        logger.warn("TELEGRAM_BOT_TOKEN not set — skipping getWebhookInfo check");
+        return;
+      }
+      try {
+        const res = await fetch(
+          `https://api.telegram.org/bot${token}/getWebhookInfo`,
+        );
+        const data = (await res.json()) as {
+          ok: boolean;
+          result: Record<string, unknown>;
+        };
+        if (data.ok) {
+          logger.info({ webhookInfo: data.result }, "Telegram getWebhookInfo");
+        } else {
+          logger.warn({ data }, "Telegram getWebhookInfo returned ok=false");
+        }
+      } catch (err) {
+        logger.error({ err }, "Failed to call Telegram getWebhookInfo");
+      }
+    }, 10_000); // wait 10s for Python bot to start and register the webhook
   }
 });

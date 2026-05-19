@@ -1,0 +1,80 @@
+Fix webhook production architecture properly. Do not suggest polling.
+
+Current situation:
+
+* BOT_MODE=webhook
+* WEBHOOK_URL=https://telegram-task-bot.replit.app/api/telegram-webhook
+* Webhook is set successfully
+* Workspace logs show aiohttp webhook server running on 127.0.0.1:8082
+* But Telegram bot does not answer
+* No errors in workspace logs
+
+Root problem:
+Workspace Run is not production. Telegram sends updates to the published Replit app URL. Production deployment must run the webhook stack, not only workspace.
+
+Required fix:
+
+1. Make production deployment start BOTH services:
+
+   * Express API server
+   * Python Telegram bot webhook server on 127.0.0.1:8082
+
+2. Create one production start command/script, for example:
+   npm run start:production
+   or
+   bash start-production.sh
+
+3. The production start script must:
+
+   * start Python bot in webhook mode
+   * start Express API server
+   * keep both processes alive
+   * fail loudly if one process crashes
+
+4. The Express API route:
+   POST /api/telegram-webhook
+   must proxy the Telegram update to:
+   http://127.0.0.1:8082/api/telegram-webhook
+   or whatever exact internal Python webhook endpoint exists.
+
+5. Add health checks:
+   GET /api/health
+   returns API server status.
+   GET /api/telegram-webhook/health
+   returns:
+
+   * api: ok
+   * python_bot_webhook_server: ok / fail
+   * checked internal URL
+   * current BOT_MODE
+   * WEBHOOK_URL
+
+6. Add startup logs in production:
+
+   * BOT_MODE
+   * WEBHOOK_URL
+   * API server port
+   * Python webhook server port
+   * whether internal webhook server is reachable
+
+7. Check Telegram getWebhookInfo after startup and log:
+
+   * url
+   * pending_update_count
+   * last_error_message
+   * last_error_date
+
+8. Verify using the published production URL only:
+
+   * https://telegram-task-bot.replit.app/api/health
+   * https://telegram-task-bot.replit.app/api/telegram-webhook/health
+
+9. Do not change task creation logic.
+
+10. Do not change Supabase schema.
+
+11. Do not touch Kanban UI.
+
+12. Do not revert to polling.
+
+After fixing, tell me the exact Replit production run command I must set in Deployments.
