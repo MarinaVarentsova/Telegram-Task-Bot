@@ -75,12 +75,32 @@ function getColumnStyle(name: string): ColumnStyle {
 // ── Component ─────────────────────────────────────────────────────────────────
 
 export function KanbanBoard() {
-  const { columns, categories, tasks, isLoading, error } = useBoardData();
+  const { columns, categories, tasks, hasTgId, isLoading, error } = useBoardData();
   const updateTask = useUpdateTask();
 
   const [selectedCategory, setSelectedCategory] = useState<string | null>(null);
   const [selectedColumn, setSelectedColumn] = useState<string | null>(null);
   const [selectedTask, setSelectedTask] = useState<Task | null>(null);
+
+  // No tg_id in URL — user must open the board from the Telegram bot
+  if (!hasTgId) {
+    return (
+      <div className="flex h-screen items-center justify-center" style={{ background: "#f0f3f8" }}>
+        <div
+          className="rounded-2xl px-8 py-10 text-center shadow-sm"
+          style={{ background: "#ffffff", maxWidth: 360, border: "1px solid #dde3ed" }}
+        >
+          <div className="mb-3 text-3xl">🤖</div>
+          <p className="text-base font-medium" style={{ color: "#1e2a3a" }}>
+            Откройте доску из Telegram-бота
+          </p>
+          <p className="mt-2 text-sm" style={{ color: "#6b7a8d" }}>
+            Нажмите кнопку «Просмотреть бэклог» в боте, чтобы увидеть свои задачи.
+          </p>
+        </div>
+      </div>
+    );
+  }
 
   if (isLoading) {
     return (

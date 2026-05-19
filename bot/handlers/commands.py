@@ -23,6 +23,16 @@ logger = logging.getLogger(__name__)
 router = Router()
 
 
+def _board_url(telegram_id: int) -> str:
+    """
+    Возвращает URL Kanban-доски с tg_id пользователя в query params.
+    Без tg_id пользователь увидит сообщение "откройте из бота".
+    """
+    if not APP_URL:
+        return ""
+    return f"{APP_URL}?tg_id={telegram_id}"
+
+
 # ─── /start ───────────────────────────────────────────────────────────────────
 
 @router.message(Command("start"))
@@ -62,24 +72,34 @@ async def btn_create_task(message: Message) -> None:
 
 @router.message(F.text == BTN_BACKLOG)
 async def btn_view_backlog(message: Message) -> None:
-    """Открывает ссылку на бэклог или сообщает что она не настроена."""
-    if APP_URL:
+    """Открывает ссылку на доску с tg_id пользователя."""
+    user = message.from_user
+    if not user:
+        return
+
+    url = _board_url(user.id)
+    if url:
         await message.answer(
-            "Открыть бэклог:",
-            reply_markup=backlog_inline_button(APP_URL),
+            "Открыть вашу доску:",
+            reply_markup=backlog_inline_button(url),
         )
     else:
-        await message.answer("Ссылка на бэклог пока не настроена.")
+        await message.answer("Ссылка на доску пока не настроена.")
 
 
-# ─── /tasks и /today — редирект на доску ─────────────────────────────────────
+# ─── /tasks и /today — ссылка на доску ───────────────────────────────────────
 
 @router.message(Command("tasks"))
 async def cmd_tasks(message: Message) -> None:
-    if APP_URL:
+    user = message.from_user
+    if not user:
+        return
+
+    url = _board_url(user.id)
+    if url:
         await message.answer(
-            "Бэклог удобнее смотреть на доске.",
-            reply_markup=backlog_inline_button(APP_URL),
+            "Ваши задачи на доске:",
+            reply_markup=backlog_inline_button(url),
         )
     else:
         await message.answer(
@@ -90,10 +110,15 @@ async def cmd_tasks(message: Message) -> None:
 
 @router.message(Command("today"))
 async def cmd_today(message: Message) -> None:
-    if APP_URL:
+    user = message.from_user
+    if not user:
+        return
+
+    url = _board_url(user.id)
+    if url:
         await message.answer(
-            "Бэклог удобнее смотреть на доске.",
-            reply_markup=backlog_inline_button(APP_URL),
+            "Задачи на сегодня — на вашей доске:",
+            reply_markup=backlog_inline_button(url),
         )
     else:
         await message.answer(

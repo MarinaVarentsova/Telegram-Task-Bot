@@ -52,6 +52,8 @@ async def transcribe_voice(audio_bytes: bytes, file_format: str = "ogg") -> str:
 async def extract_task_data(
     text: str,
     categories: list[dict],
+    columns: list[dict],
+    today_iso: str,
 ) -> dict:
     """
     Извлекает данные задачи из произвольного текста пользователя.
@@ -59,26 +61,62 @@ async def extract_task_data(
     Args:
         text: Исходный текст (или транскрипция голосового сообщения)
         categories: Список доступных категорий [{"id": ..., "name": ...}, ...]
+        columns: Список доступных колонок [{"id": ..., "name": ...}, ...]
+        today_iso: Сегодняшняя дата в формате YYYY-MM-DD
 
     Returns:
-        Словарь с полями: title, description, deadline, category_name
+        Словарь с полями: title, description, deadline, board_column, category
     """
     client = _get_client()
-    category_names = [c["name"] for c in categories] if categories else []
-    categories_str = ", ".join(category_names) if category_names else "прочее"
 
-    system_prompt = f"""Ты помощник по управлению задачами. Извлеки структурированные данные задачи из текста.
+    category_names = [c["name"] for c in categories] if categories else ["прочее"]
+    column_names = [c["name"] for c in columns] if columns else ["бэклог"]
+    categories_str = ", ".join(category_names)
+    columns_str = ", ".join(column_names)
 
+    system_prompt = f"""Ты помощник по управлению задачами. Извлеки структурированные данные задачи из текста пользователя.
+
+Сегодняшняя дата: {today_iso}
 Доступные категории: {categories_str}
+Доступные колонки доски: {columns_str}
 
-Правила:
-- title: краткое название задачи на русском языке, максимум 80 символов
-- description: полное структурированное описание задачи на русском языке
-- deadline: дедлайн в формате ISO 8601 (YYYY-MM-DDTHH:MM:SS) если упомянут, иначе null
-- category_name: выбери наиболее подходящую категорию из списка или "прочее"
+Правила извлечения:
+
+ЗАГОЛОВОК (title):
+- Краткое описание задачи, максимум 80 символов
+- Убери из заголовка командные слова: "поставь мне задачу", "создай задачу", "добавь задачу", "запиши задачу"
+- Убери из заголовка метаданные: упоминания дат, колонок, тегов/категорий
+- Только суть самой задачи
+
+ОПИСАНИЕ (description):
+- Полный контекст задачи, сохрани все подробности из слов пользователя
+- Можно включить подробности, убранные из заголовка
+
+ДЕДЛАЙН (deadline):
+- Если упомянута конкретная дата → дедлайн в формате YYYY-MM-DD (только дата, без времени)
+- Используй текущий год: {today_iso[:4]}
+- Если дата уже прошла в текущем году → используй следующий год
+- "сегодня" как ДАТА (не как колонка) → {today_iso}
+- "завтра" как дата → следующий день после {today_iso}
+- Если пользователь сказал "без даты" → null
+- Если дата вообще не упомянута → null
+- Примеры: "28 мая" → "{today_iso[:4]}-05-28", "1 июня" → "{today_iso[:4]}-06-01"
+
+КОЛОНКА (board_column) — выбери ОДНУ из: {columns_str}
+- "на сегодня", "задача на сегодня" → "сегодня"
+- "в бэклог", "в backlog", не упомянуто → "бэклог"
+- "на неделе", "на этой неделе" → "на неделе"
+- "в выполнено" → "выполнено"
+- Сопоставляй без учёта регистра
+- Если колонка не упомянута → "бэклог"
+
+КАТЕГОРИЯ (category) — выбери ОДНУ из: {categories_str}
+- "с тегом X", "категория X", "тег X" → название категории X
+- Сопоставляй без учёта регистра
+- Если категория не упомянута → "прочее"
 
 Отвечай ТОЛЬКО валидным JSON без markdown-обёртки:
-{{"title": "...", "description": "...", "deadline": null, "category_name": "..."}}"""
+{{"title": "...", "description": "...", "deadline": null, "board_column": "...", "category": "..."}}"""
 
     response = await client.chat.completions.create(
         model="gpt-5-mini",
@@ -96,14 +134,19 @@ async def extract_task_data(
 
     try:
         data = json.loads(content)
-        logger.info(f"Извлечена задача: title='{data.get('title', '')[:50]}'")
+        logger.info(
+            f"Извлечена задача: title='{data.get('title', '')[:50]}' "
+            f"column='{data.get('board_column', '')}' "
+            f"category='{data.get('category', '')}' "
+            f"deadline='{data.get('deadline')}'"
+        )
         return data
     except json.JSONDecodeError:
-        logger.error(f"Ошибка парсинга JSON: {content[:200]}")
-        # Запасной вариант
+        logger.error(f"Ошибка парсинга JSON от AI: {content[:200]}")
         return {
             "title": text[:80],
             "description": text,
             "deadline": None,
-            "category_name": "прочее",
+            "board_column": "бэклог",
+            "category": "прочее",
         }

@@ -2,8 +2,11 @@
  * Thin API client that talks to the Express API server (/api/kanban/*)
  * instead of hitting Supabase directly from the browser.
  *
- * Supabase's new sb_secret_* keys are blocked in browser environments,
- * so all data access is proxied through the backend.
+ * Supabase's sb_secret_* keys are blocked in browsers, so all data access
+ * is proxied through the backend.
+ *
+ * Task fetching requires a tg_id (Telegram user ID) query param so the
+ * backend returns only that user's tasks.
  */
 
 const BASE = "/api/kanban";
@@ -33,9 +36,18 @@ async function apiFetch<T>(
 export const api = {
   columns: () => apiFetch<unknown[]>("/columns"),
   categories: () => apiFetch<unknown[]>("/categories"),
-  tasks: () => apiFetch<unknown[]>("/tasks"),
-  users: () => apiFetch<unknown[]>("/users"),
+
+  /** Fetch tasks for a specific Telegram user. Returns [] when tgId is absent. */
+  tasks: (tgId: string) =>
+    apiFetch<unknown[]>(`/tasks?tg_id=${encodeURIComponent(tgId)}`),
+
   updateTask: (id: string, data: Record<string, unknown>) =>
     apiFetch<void>(`/tasks/${id}`, "PATCH", data),
+
   deleteTask: (id: string) => apiFetch<void>(`/tasks/${id}`, "DELETE"),
 };
+
+/** Read the tg_id query param from the current URL (set by the Telegram bot). */
+export function getTgIdFromUrl(): string | null {
+  return new URLSearchParams(window.location.search).get("tg_id");
+}

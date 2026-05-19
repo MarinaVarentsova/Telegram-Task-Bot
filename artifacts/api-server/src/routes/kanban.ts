@@ -71,17 +71,40 @@ router.get("/categories", async (_req: Request, res: Response) => {
   }
 });
 
-// GET /api/kanban/tasks
-router.get("/tasks", async (_req: Request, res: Response) => {
+// GET /api/kanban/tasks?tg_id=<telegram_user_id>
+// Returns only tasks belonging to the Telegram user identified by tg_id.
+// Returns [] when tg_id is missing or the user is not found.
+router.get("/tasks", async (req: Request, res: Response) => {
   try {
-    const data = await sbFetch("tg_tasks?select=*&order=created_at.desc");
+    const tgId = req.query["tg_id"] as string | undefined;
+
+    if (!tgId) {
+      // No tg_id supplied → return empty (never leak all-user data)
+      return res.json([]);
+    }
+
+    // Resolve telegram_id → internal user UUID
+    const users = await sbFetch(
+      `tg_users?telegram_id=eq.${encodeURIComponent(tgId)}&select=id&limit=1`,
+    ) as { id: string }[];
+
+    if (!users || users.length === 0) {
+      return res.json([]);
+    }
+
+    const userId = users[0].id;
+
+    const data = await sbFetch(
+      `tg_tasks?user_id=eq.${encodeURIComponent(userId)}&select=*&order=created_at.desc`,
+    );
+
     res.json(data);
   } catch (err) {
     handleError(res, err);
   }
 });
 
-// GET /api/kanban/users
+// GET /api/kanban/users  (admin use only — not exposed in UI)
 router.get("/users", async (_req: Request, res: Response) => {
   try {
     const data = await sbFetch("tg_users?select=*");

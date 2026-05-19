@@ -1,0 +1,132 @@
+Improve Telegram task bot and Kanban user isolation.
+
+Goal:
+Each Telegram user must see only their own tasks.
+Also improve task extraction from natural spoken text using a clear parsing structure.
+
+PART 1. User isolation
+
+Current problem:
+Kanban may show tasks from all users.
+
+Requirements:
+
+1. Every task in tg_tasks must be linked to the Telegram user who created it.
+2. Use existing tg_users table.
+3. tg_tasks should use user_id that references tg_users.id.
+4. When bot creates a task:
+
+   * find or create tg_users by telegram_id
+   * save tg_tasks.user_id = tg_users.id
+5. Kanban board should show only tasks for current Telegram user.
+6. MVP approach:
+
+   * Telegram bot opens Kanban with URL:
+     APP_URL + "?tg_id=<telegram_user_id>"
+   * frontend reads tg_id from query params
+   * backend/API resolves tg_id → tg_users.id
+   * returns only tg_tasks where user_id = resolved tg_users.id
+7. If tg_id is missing:
+
+   * show message in UI:
+     "Откройте доску из Telegram-бота, чтобы увидеть свои задачи."
+   * do not show all tasks.
+8. Do not show tasks from other users.
+
+Important:
+
+* Do not create duplicate users.
+* Do not expose SUPABASE_SERVICE_ROLE_KEY in frontend.
+* Keep all Supabase requests through backend/API server.
+
+PART 2. Task extraction logic
+
+Improve AI extraction from text/voice.
+
+User may say phrases like:
+"Поставь мне задачу на 28 мая на сегодня с тегом Здоровье купить лекарство от насморка, которое нам посоветовали в больнице и которое вроде бы даже помогает, не помню как называется носоринтус вроде бы"
+
+Need to extract:
+
+deadline:
+28 мая
+
+board_column:
+сегодня
+
+category:
+Здоровье
+
+title:
+Купить лекарство от насморка
+
+description:
+Купить лекарство от насморка, которое нам посоветовали в больнице и которое вроде бы даже помогает, не помню как называется носоринтус вроде бы
+
+Extraction structure:
+
+* deadline: date/time or null
+* board_column: one of existing tg_board_columns or null/default
+* category: one of existing tg_categories or null/default
+* title: short task name
+* description: full useful description
+
+Rules:
+
+1. If user says "без даты" — deadline must be null.
+2. If user does not mention date — deadline should be null.
+3. If user says "сегодня", "на сегодня" as column/status — board_column = "сегодня".
+4. If user says "в бэклог", "в backlog" — board_column = "бэклог".
+5. If user says "на неделе" — board_column = "на неделе".
+6. If user says "в выполнено" — board_column = "выполнено".
+7. If user does not mention board column — default to "бэклог".
+8. If user says "с тегом Здоровье", "категория здоровье" — category = "здоровье".
+9. If category is not mentioned — default to "прочее".
+10. Match categories case-insensitively.
+11. Match board columns case-insensitively.
+12. title should be concise, max 80 characters.
+13. description should preserve the full useful context from the user's phrase.
+14. Remove command words from title:
+
+    * "поставь мне задачу"
+    * "создай задачу"
+    * "добавь задачу"
+    * "запиши задачу"
+15. Do not put metadata words into title:
+
+    * date phrases
+    * board column phrases
+    * tag/category phrases
+
+PART 3. Example expected result
+
+Input:
+"Поставь мне задачу на 28 мая на сегодня с тегом Здоровье купить лекарство от насморка, которое нам посоветовали в больнице и которое вроде бы даже помогает, не помню как называется носоринтус вроде бы"
+
+Expected extracted JSON:
+{
+"deadline": "2026-05-28",
+"board_column": "сегодня",
+"category": "здоровье",
+"title": "Купить лекарство от насморка",
+"description": "Купить лекарство от насморка, которое нам посоветовали в больнице и которое вроде бы даже помогает, не помню как называется носоринтус вроде бы"
+}
+
+PART 4. Important implementation notes
+
+1. Use current date/year when parsing dates without year.
+2. If parsed date already passed this year, use next year.
+3. Store deadline in the existing deadline/крайний срок field used by current schema.
+4. Keep current Russian DB field mapping working.
+5. Do not break existing cards on Kanban.
+6. Do not create new tables unless absolutely necessary.
+7. If tg_tasks.user_id column is missing, add a safe migration to create it and link it to tg_users.id.
+8. Before migration, check if user_id already exists.
+9. Add clear logs:
+
+   * telegram_id
+   * resolved user_id
+   * extracted task JSON
+   * saved task id
+10. Keep bot replies short:
+    "✅ Задача создана и добавлена в бэклог."
