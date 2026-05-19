@@ -108,8 +108,11 @@ async def run_webhook(bot: Bot, dp: Dispatcher, logger: logging.Logger) -> None:
     await runner.setup()
     site = web.TCPSite(runner, host="127.0.0.1", port=WEBHOOK_INTERNAL_PORT)
 
+    scheduler_task = None
+    site_started = False          # guard: only delete webhook if WE bound the port
     try:
         await site.start()
+        site_started = True
         logger.info(f"aiohttp webhook-сервер запущен на 127.0.0.1:{WEBHOOK_INTERNAL_PORT}")
         scheduler_task = asyncio.create_task(reminder_scheduler(bot))
         logger.info("Reminder scheduler запущен")
@@ -119,13 +122,18 @@ async def run_webhook(bot: Bot, dp: Dispatcher, logger: logging.Logger) -> None:
         logger.error(f"Критическая ошибка в webhook-сервере: {e}")
         raise
     finally:
-        scheduler_task.cancel()
+        if scheduler_task is not None:
+            scheduler_task.cancel()
         await runner.cleanup()
-        try:
-            await bot.delete_webhook()
-            logger.info("Webhook удалён из Telegram.")
-        except Exception:
-            pass
+        if site_started:
+            # Only delete the webhook when we were the process that bound the port.
+            # If site.start() failed (e.g. port busy), another process owns the
+            # webhook — removing it here would break that process.
+            try:
+                await bot.delete_webhook()
+                logger.info("Webhook удалён из Telegram.")
+            except Exception:
+                pass
         await bot.session.close()
         logger.info("Бот (webhook) остановлен.")
 

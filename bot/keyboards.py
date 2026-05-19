@@ -10,8 +10,8 @@ from aiogram.types import (
 )
 
 # Тексты кнопок — используются для сравнения входящих сообщений
-BTN_CREATE = "➕ Создать задачу"
-BTN_BACKLOG = "📋 Просмотреть бэклог"
+BTN_CREATE  = "➕ Создать задачу"
+BTN_BACKLOG = "📋 Открыть доску"
 
 
 def main_keyboard() -> ReplyKeyboardMarkup:
@@ -26,5 +26,5 @@ def main_keyboard() -> ReplyKeyboardMarkup:
 def backlog_inline_button(url: str) -> InlineKeyboardMarkup:
     """Инлайн-кнопка для открытия бэклога по URL."""
     return InlineKeyboardMarkup(
-        inline_keyboard=[[InlineKeyboardButton(text="📋 Открыть бэклог", url=url)]]
+        inline_keyboard=[[InlineKeyboardButton(text="📋 Открыть доску", url=url)]]
     )

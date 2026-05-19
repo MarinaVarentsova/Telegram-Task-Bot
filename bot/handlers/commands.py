@@ -43,7 +43,7 @@ def _board_url(telegram_id: int) -> str:
 
 @router.message(Command("start"))
 async def cmd_start(message: Message) -> None:
-    """Регистрирует пользователя и показывает главную клавиатуру."""
+    """Регистрирует пользователя и показывает приветственный онбординг."""
     user = message.from_user
     if not user:
         return
@@ -54,13 +54,30 @@ async def cmd_start(message: Message) -> None:
             username=user.username,
             first_name=user.first_name,
         )
-        await message.answer(
-            "Я помогу быстро записывать задачи. "
-            "Создайте задачу голосом или текстом, а бэклог смотрите на доске.",
-            reply_markup=main_keyboard(),
+
+        welcome = (
+            "🧩 <b>С вас задачи — с меня структура</b>\n"
+            "\n"
+            "🎤✨ Наговорите/напишите задачу — я помогу записать в бэклог\n"
+            "\n"
+            "Для лучшего результата укажите:\n"
+            "\n"
+            "📅 срок\n"
+            "📌 колонку\n"
+            "🏷 тег\n"
+            "📝 задачу\n"
+            "\n"
+            "Например:\n"
+            "\n"
+            "💬 «Поставь задачу на 20 мая на сегодня тег здоровье "
+            "купить лекарство от аллергии»"
         )
+
+        await message.answer(welcome, reply_markup=main_keyboard())
+
         if os.path.isfile(_KANBAN_GIF):
             await message.answer_animation(FSInputFile(_KANBAN_GIF))
+
     except Exception as e:
         logger.error(f"Ошибка в /start для {user.id}: {e}")
         await message.answer("Произошла ошибка при регистрации. Попробуйте позже.")

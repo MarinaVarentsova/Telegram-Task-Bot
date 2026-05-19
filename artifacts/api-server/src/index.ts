@@ -87,7 +87,11 @@ async function spawnPythonBot(): Promise<void> {
     return;
   }
 
-  const workspaceRoot = path.resolve(process.cwd());
+  // process.cwd() is the api-server dir when started via pnpm, NOT the workspace
+  // root. Use import.meta.url to walk up reliably:
+  //   dist/index.mjs → api-server/ → artifacts/ → workspace root
+  const _thisFile = new URL(import.meta.url).pathname;
+  const workspaceRoot = path.resolve(path.dirname(_thisFile), "..", "..", "..");
   const botScript = path.join(workspaceRoot, "bot", "main.py");
   const pythonBin = process.env["PYTHON_BIN"] ?? "python3";
 
