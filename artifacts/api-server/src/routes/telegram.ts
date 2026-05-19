@@ -5,13 +5,12 @@
  *   Receives updates from Telegram and proxies them to the Python bot's
  *   internal aiohttp server running on localhost:WEBHOOK_INTERNAL_PORT.
  *
- *   Flow:
- *     Telegram → Express POST /api/telegram-webhook
- *              → proxy → http://127.0.0.1:8082/ (Python aiohttp)
- *                       → aiogram Dispatcher → handlers
+ *   Retries up to MAX_PROXY_RETRIES times (with delay) before returning 503,
+ *   so the bot has time to finish starting up when the first updates arrive.
  *
  * GET /api/telegram-webhook/health
- *   Probes the Python bot's internal server and returns a full status report:
+ *   Probes the Python bot's internal server with retries and returns a full
+ *   status report:
  *   - api: "ok"
  *   - python_bot_webhook_server: "ok" | "fail"
  *   - checked_internal_url
@@ -27,44 +26,71 @@ const router = Router();
 const BOT_INTERNAL_PORT = process.env["WEBHOOK_INTERNAL_PORT"] ?? "8082";
 const BOT_INTERNAL_URL = `http://127.0.0.1:${BOT_INTERNAL_PORT}/`;
 
+/** Wait ms milliseconds. */
+const sleep = (ms: number): Promise<void> =>
+  new Promise((resolve) => setTimeout(resolve, ms));
+
 // ── POST /api/telegram-webhook ────────────────────────────────────────────────
 
+const MAX_PROXY_RETRIES = 5;
+const PROXY_RETRY_DELAY_MS = 2_000;
+
 router.post("/telegram-webhook", async (req: Request, res: Response) => {
-  try {
-    const response = await fetch(BOT_INTERNAL_URL, {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify(req.body),
-    });
-    // Telegram only cares that we return 2xx
-    res.status(response.status).end();
-  } catch (err) {
-    logger.error({ err }, "Failed to proxy Telegram update to bot server");
-    res.status(503).json({ error: "Bot server unavailable" });
+  for (let attempt = 0; attempt <= MAX_PROXY_RETRIES; attempt++) {
+    try {
+      const response = await fetch(BOT_INTERNAL_URL, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify(req.body),
+      });
+      // Telegram only cares that we return 2xx
+      res.status(response.ok ? 200 : response.status).end();
+      return;
+    } catch (err) {
+      if (attempt < MAX_PROXY_RETRIES) {
+        logger.warn(
+          { attempt: attempt + 1, maxRetries: MAX_PROXY_RETRIES, retryInMs: PROXY_RETRY_DELAY_MS },
+          "Bot server not ready — retrying after delay",
+        );
+        await sleep(PROXY_RETRY_DELAY_MS);
+      } else {
+        logger.error({ err }, "Failed to proxy Telegram update to bot server after all retries");
+        res.status(503).json({ error: "Bot server unavailable" });
+      }
+    }
   }
 });
 
 // ── GET /api/telegram-webhook/health ─────────────────────────────────────────
 
+const HEALTH_PROBE_RETRIES = 3;
+const HEALTH_PROBE_DELAY_MS = 1_000;
+
 router.get("/telegram-webhook/health", async (_req: Request, res: Response) => {
   const BOT_MODE = process.env["BOT_MODE"] ?? "not set";
   const WEBHOOK_URL = process.env["WEBHOOK_URL"] ?? "not set";
 
-  // Probe the Python bot's internal aiohttp server.
+  // Probe the Python bot's internal aiohttp server with retries.
   // fetch() only throws on network errors (ECONNREFUSED, timeout).
   // A 405 response from aiogram means the server IS up (only POST is valid).
   let botStatus: "ok" | "fail" = "fail";
   let botError: string | null = null;
 
-  try {
-    const ctrl = new AbortController();
-    const timeoutId = setTimeout(() => ctrl.abort(), 3000);
-    await fetch(BOT_INTERNAL_URL, { method: "GET", signal: ctrl.signal });
-    clearTimeout(timeoutId);
-    botStatus = "ok"; // any HTTP response = server is listening
-  } catch (err) {
-    botError = err instanceof Error ? err.message : String(err);
-    botStatus = "fail";
+  for (let attempt = 0; attempt <= HEALTH_PROBE_RETRIES; attempt++) {
+    try {
+      const ctrl = new AbortController();
+      const timeoutId = setTimeout(() => ctrl.abort(), 3000);
+      await fetch(BOT_INTERNAL_URL, { method: "GET", signal: ctrl.signal });
+      clearTimeout(timeoutId);
+      botStatus = "ok"; // any HTTP response = server is listening
+      botError = null;
+      break;
+    } catch (err) {
+      botError = err instanceof Error ? err.message : String(err);
+      if (attempt < HEALTH_PROBE_RETRIES) {
+        await sleep(HEALTH_PROBE_DELAY_MS);
+      }
+    }
   }
 
   // Fetch Telegram webhook info (best-effort)

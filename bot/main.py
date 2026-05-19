@@ -11,8 +11,10 @@ import asyncio
 import logging
 import sys
 
+import aiohttp
 from aiogram import Bot, Dispatcher
 from aiogram.client.default import DefaultBotProperties
+from aiogram.client.session.aiohttp import AiohttpSession
 from aiogram.enums import ParseMode
 from aiogram.fsm.storage.memory import MemoryStorage
 
@@ -41,9 +43,14 @@ def setup_logging() -> None:
 
 def _make_bot_and_dp() -> tuple[Bot, Dispatcher]:
     """Создаёт экземпляры Bot и Dispatcher с подключёнными роутерами."""
+    # Жёсткий таймаут на все вызовы Telegram API — защита от зависания при старте
+    session = AiohttpSession(
+        timeout=aiohttp.ClientTimeout(total=15, connect=5)
+    )
     bot = Bot(
         token=TELEGRAM_BOT_TOKEN,
         default=DefaultBotProperties(parse_mode=ParseMode.HTML),
+        session=session,
     )
     dp = Dispatcher(storage=MemoryStorage())
     dp.include_router(commands.router)
@@ -91,14 +98,14 @@ async def run_webhook(bot: Bot, dp: Dispatcher, logger: logging.Logger) -> None:
     logger.info(f"Webhook URL: {WEBHOOK_URL}")
     logger.info(f"Внутренний порт aiohttp: {WEBHOOK_INTERNAL_PORT}")
 
-    # Регистрируем webhook в Telegram
+    # Регистрируем webhook в Telegram (нефатально — продолжаем даже при ошибке,
+    # чтобы aiohttp-сервер всё равно стартовал и принимал уже настроенный webhook)
     try:
         await bot.set_webhook(WEBHOOK_URL, drop_pending_updates=True)
         info = await bot.get_webhook_info()
         logger.info(f"Webhook успешно установлен: url={info.url}, pending={info.pending_update_count}")
     except Exception as e:
-        logger.error(f"Ошибка установки webhook: {e}")
-        raise
+        logger.warning(f"set_webhook не удался (продолжаем — webhook мог быть установлен ранее): {e}")
 
     # Запускаем aiohttp-сервер для приёма апдейтов от Telegram через Express-прокси
     aio_app = web.Application()

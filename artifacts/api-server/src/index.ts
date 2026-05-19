@@ -1,4 +1,4 @@
-import { spawn } from "child_process";
+import { spawn, type ChildProcess } from "child_process";
 import net from "net";
 import path from "path";
 import app from "./app";
@@ -33,6 +33,22 @@ function isTcpPortFree(tcpPort: number, host: string): Promise<boolean> {
   });
 }
 
+/** Returns true if port is accepting TCP connections (i.e. something is listening). */
+function isTcpPortOpen(tcpPort: number, host: string): Promise<boolean> {
+  return new Promise((resolve) => {
+    const socket = new net.Socket();
+    const cleanup = (result: boolean) => {
+      socket.destroy();
+      resolve(result);
+    };
+    socket.setTimeout(1000);
+    socket.once("connect", () => cleanup(true));
+    socket.once("error", () => cleanup(false));
+    socket.once("timeout", () => cleanup(false));
+    socket.connect(tcpPort, host);
+  });
+}
+
 /** Forward each non-empty line from a Buffer through the structured logger. */
 function logPythonOutput(
   data: Buffer,
@@ -58,11 +74,11 @@ function logPythonOutput(
  * and the internal port is free (not occupied by an external bot process,
  * e.g. the "Telegram Bot" workspace workflow in dev mode).
  *
- * All Python stdout/stderr is forwarded through the Pino structured logger
- * so it appears as JSON in Replit's production deployment log aggregator
- * (which silently drops plain-text output).
- *
- * Auto-restarts on crash with a 5-second delay.
+ * Features:
+ * - All Python stdout/stderr forwarded through Pino structured logger
+ * - Auto-restarts on crash with a 5-second delay
+ * - Startup watchdog: if port not open within 60s, kills and restarts Python
+ * - Periodic liveness check every 60s: restarts if port goes down
  */
 async function spawnPythonBot(): Promise<void> {
   const BOT_MODE = process.env["BOT_MODE"];
@@ -100,7 +116,25 @@ async function spawnPythonBot(): Promise<void> {
     "Port free — spawning Python bot process",
   );
 
+  let currentProcess: ChildProcess | null = null;
+  let watchdogTimer: ReturnType<typeof setInterval> | null = null;
+  let startupTimer: ReturnType<typeof setTimeout> | null = null;
+
+  const killCurrent = (): void => {
+    if (currentProcess && !currentProcess.killed) {
+      logger.warn({ pid: currentProcess.pid }, "Killing stale Python bot process");
+      currentProcess.kill("SIGKILL");
+      currentProcess = null;
+    }
+  };
+
   const startBot = (): void => {
+    // Clear any pending startup timeout from a previous attempt
+    if (startupTimer) {
+      clearTimeout(startupTimer);
+      startupTimer = null;
+    }
+
     const botProcess = spawn(pythonBin, ["-u", botScript], {
       cwd: workspaceRoot,
       env: {
@@ -109,6 +143,9 @@ async function spawnPythonBot(): Promise<void> {
       },
       stdio: ["ignore", "pipe", "pipe"],
     });
+
+    currentProcess = botProcess;
+    logger.info({ pid: botProcess.pid }, "Python bot process spawned");
 
     // Route Python output through Pino so it appears as structured JSON in
     // Replit's production log aggregator (plain-text stdout is silently dropped).
@@ -124,17 +161,69 @@ async function spawnPythonBot(): Promise<void> {
         { err, pythonBin, botScript },
         "Python bot spawn error — python3 not found or failed to exec",
       );
+      currentProcess = null;
       logger.info("Retrying Python bot in 5s...");
       setTimeout(startBot, 5_000);
     });
 
     botProcess.on("exit", (code: number | null, signal: string | null) => {
+      if (startupTimer) {
+        clearTimeout(startupTimer);
+        startupTimer = null;
+      }
       logger.warn(
-        { exitCode: code, signal },
+        { exitCode: code, signal, pid: botProcess.pid },
         "Python bot process exited — restarting in 5s",
       );
+      currentProcess = null;
       setTimeout(startBot, 5_000);
     });
+
+    // ── Startup watchdog ──────────────────────────────────────────────────────
+    // If Python hasn't bound the port within 60s, something is stuck
+    // (e.g. Telegram API call hanging without timeout). Kill and restart.
+    startupTimer = setTimeout(async () => {
+      startupTimer = null;
+      const open = await isTcpPortOpen(internalPort, "127.0.0.1");
+      if (!open) {
+        logger.error(
+          { pid: botProcess.pid, internalPort, waitedMs: 60_000 },
+          "Python bot startup watchdog: port still closed after 60s — killing and restarting",
+        );
+        killCurrent();
+        setTimeout(startBot, 2_000);
+      } else {
+        logger.info(
+          { pid: botProcess.pid, internalPort },
+          "Python bot startup watchdog: port is open — bot is healthy",
+        );
+        // Start the periodic liveness monitor only after confirmed first open
+        startLivenessMonitor();
+      }
+    }, 60_000);
+  };
+
+  // ── Periodic liveness monitor ───────────────────────────────────────────────
+  // After the bot is confirmed running, check every 60s that it's still alive.
+  const startLivenessMonitor = (): void => {
+    if (watchdogTimer) return; // already running
+    watchdogTimer = setInterval(async () => {
+      const open = await isTcpPortOpen(internalPort, "127.0.0.1");
+      if (!open) {
+        logger.error(
+          { internalPort },
+          "Python bot liveness check: port closed — killing and restarting",
+        );
+        if (watchdogTimer) {
+          clearInterval(watchdogTimer);
+          watchdogTimer = null;
+        }
+        killCurrent();
+        setTimeout(startBot, 2_000);
+      } else {
+        logger.info({ internalPort }, "Python bot liveness check: ok");
+      }
+    }, 60_000);
   };
 
   startBot();
