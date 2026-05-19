@@ -14,6 +14,7 @@ import sys
 from aiogram import Bot, Dispatcher
 from aiogram.client.default import DefaultBotProperties
 from aiogram.enums import ParseMode
+from aiogram.fsm.storage.memory import MemoryStorage
 
 from config import (
     TELEGRAM_BOT_TOKEN,
@@ -44,7 +45,7 @@ def _make_bot_and_dp() -> tuple[Bot, Dispatcher]:
         token=TELEGRAM_BOT_TOKEN,
         default=DefaultBotProperties(parse_mode=ParseMode.HTML),
     )
-    dp = Dispatcher()
+    dp = Dispatcher(storage=MemoryStorage())
     dp.include_router(commands.router)
     dp.include_router(messages.router)
     return bot, dp

@@ -1,18 +1,16 @@
 """
-Обработчики команд и кнопок бота.
+Обработчики команд и кнопок главной клавиатуры.
 """
 
 import logging
 import os
+
 from aiogram import Router, F
 from aiogram.filters import Command, CommandObject
+from aiogram.fsm.context import FSMContext
 from aiogram.types import Message, FSInputFile
-from config import APP_URL
 
-# handlers/commands.py lives at  bot/handlers/commands.py
-# dirname twice  →  bot/
-_BOT_DIR = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
-_KANBAN_GIF = os.path.join(_BOT_DIR, "assets", "kanban_animation.gif")
+from config import APP_URL
 from database import (
     get_or_create_user,
     get_user_by_telegram_id,
@@ -24,16 +22,18 @@ from database import (
     change_task_category,
 )
 from keyboards import BTN_CREATE, BTN_BACKLOG, main_keyboard, backlog_inline_button
+from states import TaskStates
+
+# handlers/commands.py lives at  bot/handlers/commands.py
+# dirname twice  →  bot/
+_BOT_DIR    = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
+_KANBAN_GIF = os.path.join(_BOT_DIR, "assets", "kanban_animation.gif")
 
 logger = logging.getLogger(__name__)
 router = Router()
 
 
 def _board_url(telegram_id: int) -> str:
-    """
-    Возвращает URL Kanban-доски с tg_id пользователя в query params.
-    Без tg_id пользователь увидит сообщение "откройте из бота".
-    """
     if not APP_URL:
         return ""
     return f"{APP_URL}?tg_id={telegram_id}"
@@ -42,11 +42,14 @@ def _board_url(telegram_id: int) -> str:
 # ─── /start ───────────────────────────────────────────────────────────────────
 
 @router.message(Command("start"))
-async def cmd_start(message: Message) -> None:
-    """Регистрирует пользователя и показывает приветственный онбординг."""
+async def cmd_start(message: Message, state: FSMContext) -> None:
+    """Регистрирует пользователя, сбрасывает FSM и показывает онбординг."""
     user = message.from_user
     if not user:
         return
+
+    # Сбрасываем любое предыдущее состояние при каждом /start
+    await state.clear()
 
     try:
         await get_or_create_user(
@@ -58,7 +61,7 @@ async def cmd_start(message: Message) -> None:
         welcome = (
             "🧩 <b>С вас задачи — с меня структура</b>\n"
             "\n"
-            "🎤✨ Наговорите/напишите задачу — я помогу записать в бэклог\n"
+            "🎤✨ Наговорите/напишите задачу — добавлю в бэклог задач\n"
             "\n"
             "Для лучшего результата укажите:\n"
             "\n"
@@ -86,26 +89,28 @@ async def cmd_start(message: Message) -> None:
 # ─── Кнопка «Создать задачу» ─────────────────────────────────────────────────
 
 @router.message(F.text == BTN_CREATE)
-async def btn_create_task(message: Message) -> None:
-    """Подсказывает пользователю отправить текст или голос."""
-    await message.answer(
-        "Отправьте задачу текстом или голосовым сообщением — я сохраню её в бэклог."
-    )
+async def btn_create_task(message: Message, state: FSMContext) -> None:
+    """Переводит пользователя в режим ожидания задачи."""
+    await state.set_state(TaskStates.waiting_for_task)
+    await message.answer("Жду задачу текстом или голосом 🎤")
 
 
-# ─── Кнопка «Просмотреть бэклог» ─────────────────────────────────────────────
+# ─── Кнопка «Бэклог задач» ───────────────────────────────────────────────────
 
 @router.message(F.text == BTN_BACKLOG)
-async def btn_view_backlog(message: Message) -> None:
+async def btn_view_backlog(message: Message, state: FSMContext) -> None:
     """Открывает ссылку на доску с tg_id пользователя."""
     user = message.from_user
     if not user:
         return
 
+    # Выход из режима ожидания задачи, если был активен
+    await state.clear()
+
     url = _board_url(user.id)
     if url:
         await message.answer(
-            "Открыть вашу доску:",
+            "Ваш бэклог задач:",
             reply_markup=backlog_inline_button(url),
         )
     else:
@@ -119,18 +124,11 @@ async def cmd_tasks(message: Message) -> None:
     user = message.from_user
     if not user:
         return
-
     url = _board_url(user.id)
     if url:
-        await message.answer(
-            "Ваши задачи на доске:",
-            reply_markup=backlog_inline_button(url),
-        )
+        await message.answer("Ваши задачи на доске:", reply_markup=backlog_inline_button(url))
     else:
-        await message.answer(
-            "Бэклог удобнее смотреть на доске.",
-            reply_markup=main_keyboard(),
-        )
+        await message.answer("Бэклог удобнее смотреть на доске.", reply_markup=main_keyboard())
 
 
 @router.message(Command("today"))
@@ -138,18 +136,11 @@ async def cmd_today(message: Message) -> None:
     user = message.from_user
     if not user:
         return
-
     url = _board_url(user.id)
     if url:
-        await message.answer(
-            "Задачи на сегодня — на вашей доске:",
-            reply_markup=backlog_inline_button(url),
-        )
+        await message.answer("Задачи на сегодня — на вашей доске:", reply_markup=backlog_inline_button(url))
     else:
-        await message.answer(
-            "Бэклог удобнее смотреть на доске.",
-            reply_markup=main_keyboard(),
-        )
+        await message.answer("Бэклог удобнее смотреть на доске.", reply_markup=main_keyboard())
 
 
 # ─── /done ────────────────────────────────────────────────────────────────────

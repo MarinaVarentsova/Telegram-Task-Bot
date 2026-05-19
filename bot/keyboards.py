@@ -11,7 +11,7 @@ from aiogram.types import (
 
 # Тексты кнопок — используются для сравнения входящих сообщений
 BTN_CREATE  = "➕ Создать задачу"
-BTN_BACKLOG = "📋 Открыть доску"
+BTN_BACKLOG = "📋 Бэклог задач"
 
 
 def main_keyboard() -> ReplyKeyboardMarkup:
