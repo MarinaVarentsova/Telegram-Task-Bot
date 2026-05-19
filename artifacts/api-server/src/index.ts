@@ -33,14 +33,35 @@ function isTcpPortFree(tcpPort: number, host: string): Promise<boolean> {
   });
 }
 
+/** Forward each non-empty line from a Buffer through the structured logger. */
+function logPythonOutput(
+  data: Buffer,
+  level: "info" | "error",
+): void {
+  const text = data.toString();
+  for (const raw of text.split("\n")) {
+    const line = raw.trimEnd();
+    if (line.length > 0) {
+      if (level === "error") {
+        logger.error({ src: "python-bot" }, line);
+      } else {
+        logger.info({ src: "python-bot" }, line);
+      }
+    }
+  }
+}
+
 // ── Python bot spawner ────────────────────────────────────────────────────────
 
 /**
  * Spawns the Python Telegram bot as a child process when BOT_MODE=webhook
- * and the internal port is free (not already occupied by an external bot process,
+ * and the internal port is free (not occupied by an external bot process,
  * e.g. the "Telegram Bot" workspace workflow in dev mode).
  *
- * stdout/stderr are piped through Express so they appear in production logs.
+ * All Python stdout/stderr is forwarded through the Pino structured logger
+ * so it appears as JSON in Replit's production deployment log aggregator
+ * (which silently drops plain-text output).
+ *
  * Auto-restarts on crash with a 5-second delay.
  */
 async function spawnPythonBot(): Promise<void> {
@@ -58,7 +79,7 @@ async function spawnPythonBot(): Promise<void> {
 
   const portFree = await isTcpPortFree(internalPort, "127.0.0.1");
   if (!portFree) {
-    // Workspace scenario: "Telegram Bot" workflow is already running on this port.
+    // Workspace scenario: "Telegram Bot" workflow already running on this port.
     logger.info(
       { internalPort },
       "Python bot port already in use — bot running externally, skipping spawn",
@@ -68,51 +89,47 @@ async function spawnPythonBot(): Promise<void> {
 
   const workspaceRoot = path.resolve(process.cwd());
   const botScript = path.join(workspaceRoot, "bot", "main.py");
+  const pythonBin = process.env["PYTHON_BIN"] ?? "python3";
 
   logger.info(
-    { botScript, internalPort },
+    { botScript, internalPort, pythonBin },
     "Port free — spawning Python bot process",
   );
-
-  // Resolve the actual python3 executable path for better diagnostics
-  const pythonBin = process.env["PYTHON_BIN"] ?? "python3";
 
   const startBot = (): void => {
     const botProcess = spawn(pythonBin, ["-u", botScript], {
       cwd: workspaceRoot,
       env: {
         ...process.env,
-        PYTHONUNBUFFERED: "1", // disable Python output buffering
+        PYTHONUNBUFFERED: "1", // belt-and-suspenders alongside -u
       },
       stdio: ["ignore", "pipe", "pipe"],
     });
 
-    // Pipe Python stdout/stderr straight into Express process streams
-    // so they appear in production deployment logs.
-    botProcess.stdout?.on("data", (data: Buffer) => {
-      process.stdout.write(data);
-    });
-    botProcess.stderr?.on("data", (data: Buffer) => {
-      process.stderr.write(data);
-    });
+    // Route Python output through Pino so it appears as structured JSON in
+    // Replit's production log aggregator (plain-text stdout is silently dropped).
+    botProcess.stdout?.on("data", (data: Buffer) =>
+      logPythonOutput(data, "info"),
+    );
+    botProcess.stderr?.on("data", (data: Buffer) =>
+      logPythonOutput(data, "error"),
+    );
 
     botProcess.on("error", (err: Error) => {
       logger.error(
-        { err, pythonBin },
-        "Python bot spawn error — is python3 in PATH?",
+        { err, pythonBin, botScript },
+        "Python bot spawn error — python3 not found or failed to exec",
       );
       logger.info("Retrying Python bot in 5s...");
       setTimeout(startBot, 5_000);
     });
 
     botProcess.on("exit", (code: number | null, signal: string | null) => {
-      if (code !== null || signal !== null) {
-        logger.warn(
-          { code, signal },
-          "Python bot exited unexpectedly — restarting in 5s",
-        );
-        setTimeout(startBot, 5_000);
-      }
+      logger.warn(
+        { exitCode: code, signal },
+        "Python bot process exited — restarting in 5s",
+      );
+      setTimeout(startBot, 5_000);
     });
   };
 

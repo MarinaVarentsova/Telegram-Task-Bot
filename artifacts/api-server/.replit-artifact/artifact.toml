@@ -15,16 +15,17 @@ run = "pnpm --filter @workspace/api-server run dev"
 [services.production]
 
 [services.production.build]
-args = ["pnpm", "--filter", "@workspace/api-server", "run", "build"]
+# Builds the Node.js API server AND installs Python bot packages so the
+# child process can import aiogram/aiohttp/etc. at runtime.
+args = ["bash", "scripts/build-production.sh"]
 
 [services.production.build.env]
 NODE_ENV = "production"
 
 [services.production.run]
 # Express starts, then spawns the Python bot as a child process when
-# BOT_MODE=webhook and internal port 8082 is free (not occupied by
-# the workspace "Telegram Bot" workflow).
-# Python stdout/stderr are piped through Express so they appear in logs.
+# BOT_MODE=webhook and internal port 8082 is free. Python stdout/stderr
+# are routed through Pino so they appear in Replit's log aggregator.
 args = ["node", "--enable-source-maps", "artifacts/api-server/dist/index.mjs"]
 
 [services.production.run.env]
