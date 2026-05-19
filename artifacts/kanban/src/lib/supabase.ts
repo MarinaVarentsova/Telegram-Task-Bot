@@ -5,11 +5,19 @@
  * Supabase's sb_secret_* keys are blocked in browsers, so all data access
  * is proxied through the backend.
  *
- * Task fetching requires a tg_id (Telegram user ID) query param so the
- * backend returns only that user's tasks.
+ * Task fetching requires a tg_id (Telegram integer user ID) query param.
+ * The backend resolves:  telegram_id → tg_users.id (UUID) → tg_tasks.user_id
  */
 
 const BASE = "/api/kanban";
+
+/** Typed error thrown when the user is not found in tg_users. */
+export class UserNotFoundError extends Error {
+  constructor() {
+    super("user_not_found");
+    this.name = "UserNotFoundError";
+  }
+}
 
 async function apiFetch<T>(
   path: string,
@@ -23,6 +31,13 @@ async function apiFetch<T>(
   });
 
   if (!res.ok) {
+    // Distinguish "user not found" from generic server errors
+    if (res.status === 404) {
+      const json = await res.json().catch(() => ({})) as { error?: string };
+      if (json.error === "user_not_found") {
+        throw new UserNotFoundError();
+      }
+    }
     const text = await res.text().catch(() => String(res.status));
     throw new Error(`API ${method} ${path} → ${res.status}: ${text}`);
   }
@@ -37,7 +52,11 @@ export const api = {
   columns: () => apiFetch<unknown[]>("/columns"),
   categories: () => apiFetch<unknown[]>("/categories"),
 
-  /** Fetch tasks for a specific Telegram user. Returns [] when tgId is absent. */
+  /**
+   * Fetch tasks for a Telegram user identified by their integer telegram_id.
+   * The backend resolves telegram_id → UUID → filters tg_tasks.
+   * Throws UserNotFoundError when the user has never run /start.
+   */
   tasks: (tgId: string) =>
     apiFetch<unknown[]>(`/tasks?tg_id=${encodeURIComponent(tgId)}`),
 

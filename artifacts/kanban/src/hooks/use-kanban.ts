@@ -1,5 +1,5 @@
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
-import { api, getTgIdFromUrl } from "@/lib/supabase";
+import { api, getTgIdFromUrl, UserNotFoundError } from "@/lib/supabase";
 import { Task, Column, Category } from "@/lib/types";
 import { toast } from "sonner";
 
@@ -27,13 +27,16 @@ export function useBoardData() {
 
   const tasksQuery = useQuery({
     queryKey: ["tasks", TG_ID],
+    // Don't run query at all when tg_id is absent
+    enabled: !!TG_ID,
+    retry: (failureCount, error) => {
+      // Never retry user_not_found — it won't fix itself without /start
+      if (error instanceof UserNotFoundError) return false;
+      return failureCount < 2;
+    },
     queryFn: async () => {
-      if (!TG_ID) {
-        console.log("[kanban] no tg_id in URL — returning empty task list");
-        return [];
-      }
-
-      const raw = await api.tasks(TG_ID) as Record<string, unknown>[];
+      // TG_ID is guaranteed non-null here because enabled: !!TG_ID
+      const raw = await api.tasks(TG_ID!) as Record<string, unknown>[];
       console.log("[kanban] fetched tasks (raw):", raw.length, raw);
 
       const mapped: Task[] = raw.map((t) => ({
@@ -58,18 +61,24 @@ export function useBoardData() {
   const isLoading =
     columnsQuery.isLoading ||
     categoriesQuery.isLoading ||
-    tasksQuery.isLoading;
+    // Tasks only "loading" when we actually fire the query
+    (!!TG_ID && tasksQuery.isLoading);
+
+  // Separate user_not_found from generic errors
+  const userNotFound = tasksQuery.error instanceof UserNotFoundError;
 
   const error =
     columnsQuery.error ||
     categoriesQuery.error ||
-    tasksQuery.error;
+    // Don't surface user_not_found as a generic error — board handles it specially
+    (!userNotFound ? tasksQuery.error : null);
 
   return {
     columns: columnsQuery.data ?? [],
     categories: categoriesQuery.data ?? [],
     tasks: tasksQuery.data ?? [],
     hasTgId: !!TG_ID,
+    userNotFound,
     isLoading,
     error,
   };

@@ -72,34 +72,41 @@ function getColumnStyle(name: string): ColumnStyle {
   return { colBg: "#f4f6f9", headerBg: "#e8ecf3", accent: "#8a9ab0" };
 }
 
+// ── Shared full-screen message card ───────────────────────────────────────────
+
+function BoardMessage({ icon, title, body }: { icon: string; title: string; body: string }) {
+  return (
+    <div className="flex h-screen items-center justify-center" style={{ background: "#f0f3f8" }}>
+      <div
+        className="rounded-2xl px-8 py-10 text-center shadow-sm"
+        style={{ background: "#ffffff", maxWidth: 380, border: "1px solid #dde3ed" }}
+      >
+        <div className="mb-3 text-3xl">{icon}</div>
+        <p className="text-base font-medium" style={{ color: "#1e2a3a" }}>{title}</p>
+        <p className="mt-2 text-sm" style={{ color: "#6b7a8d" }}>{body}</p>
+      </div>
+    </div>
+  );
+}
+
 // ── Component ─────────────────────────────────────────────────────────────────
 
 export function KanbanBoard() {
-  const { columns, categories, tasks, hasTgId, isLoading, error } = useBoardData();
+  const { columns, categories, tasks, hasTgId, userNotFound, isLoading, error } = useBoardData();
   const updateTask = useUpdateTask();
 
   const [selectedCategory, setSelectedCategory] = useState<string | null>(null);
   const [selectedColumn, setSelectedColumn] = useState<string | null>(null);
   const [selectedTask, setSelectedTask] = useState<Task | null>(null);
 
-  // No tg_id in URL — user must open the board from the Telegram bot
+  // No tg_id in URL — must open from bot
   if (!hasTgId) {
-    return (
-      <div className="flex h-screen items-center justify-center" style={{ background: "#f0f3f8" }}>
-        <div
-          className="rounded-2xl px-8 py-10 text-center shadow-sm"
-          style={{ background: "#ffffff", maxWidth: 360, border: "1px solid #dde3ed" }}
-        >
-          <div className="mb-3 text-3xl">🤖</div>
-          <p className="text-base font-medium" style={{ color: "#1e2a3a" }}>
-            Откройте доску из Telegram-бота
-          </p>
-          <p className="mt-2 text-sm" style={{ color: "#6b7a8d" }}>
-            Нажмите кнопку «Просмотреть бэклог» в боте, чтобы увидеть свои задачи.
-          </p>
-        </div>
-      </div>
-    );
+    return <BoardMessage icon="🤖" title="Откройте доску из Telegram-бота" body="Нажмите кнопку «Просмотреть бэклог» в боте, чтобы увидеть свои задачи." />;
+  }
+
+  // tg_id present but user not registered yet
+  if (userNotFound) {
+    return <BoardMessage icon="👤" title="Пользователь не найден" body="Сначала нажмите /start в Telegram-боте, чтобы зарегистрироваться." />;
   }
 
   if (isLoading) {

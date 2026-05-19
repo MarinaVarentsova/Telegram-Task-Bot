@@ -72,28 +72,35 @@ router.get("/categories", async (_req: Request, res: Response) => {
 });
 
 // GET /api/kanban/tasks?tg_id=<telegram_user_id>
-// Returns only tasks belonging to the Telegram user identified by tg_id.
-// Returns [] when tg_id is missing or the user is not found.
+//
+// Flow:
+//   1. tg_id absent           → 400  (frontend shows "open from bot" message)
+//   2. tg_users lookup empty  → 404  { error: "user_not_found" }
+//   3. found                  → 200  array of tg_tasks (may be empty)
+//
+// tg_id   = Telegram integer ID  (bigint)
+// user.id = internal UUID stored in tg_tasks.user_id
+// These must NOT be compared directly.
 router.get("/tasks", async (req: Request, res: Response) => {
   try {
     const tgId = req.query["tg_id"] as string | undefined;
 
     if (!tgId) {
-      // No tg_id supplied → return empty (never leak all-user data)
-      return res.json([]);
+      return res.status(400).json({ error: "tg_id_missing" });
     }
 
-    // Resolve telegram_id → internal user UUID
+    // Step 1: resolve Telegram integer ID → internal UUID via tg_users
     const users = await sbFetch(
       `tg_users?telegram_id=eq.${encodeURIComponent(tgId)}&select=id&limit=1`,
     ) as { id: string }[];
 
     if (!users || users.length === 0) {
-      return res.json([]);
+      return res.status(404).json({ error: "user_not_found" });
     }
 
-    const userId = users[0].id;
+    const userId = users[0].id; // UUID — used for tg_tasks.user_id filter
 
+    // Step 2: fetch tasks where user_id = UUID (never compare with tg_id directly)
     const data = await sbFetch(
       `tg_tasks?user_id=eq.${encodeURIComponent(userId)}&select=*&order=created_at.desc`,
     );
