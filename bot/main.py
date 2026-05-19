@@ -42,15 +42,15 @@ def setup_logging() -> None:
 
 
 def _make_bot_and_dp() -> tuple[Bot, Dispatcher]:
-    """Создаёт экземпляры Bot и Dispatcher с подключёнными роутерами."""
-    # Жёсткий таймаут на все вызовы Telegram API — защита от зависания при старте
-    session = AiohttpSession(
-        timeout=aiohttp.ClientTimeout(total=15, connect=5)
-    )
+    """Создаёт экземпляры Bot и Dispatcher с подключёнными роутерами.
+
+    Использует сессию по умолчанию (без кастомного таймаута), чтобы
+    polling-режим aiogram не получал TypeError при int(bot.session.timeout).
+    Webhook-режим подставляет свою сессию с таймаутом внутри run_webhook().
+    """
     bot = Bot(
         token=TELEGRAM_BOT_TOKEN,
         default=DefaultBotProperties(parse_mode=ParseMode.HTML),
-        session=session,
     )
     dp = Dispatcher(storage=MemoryStorage())
     dp.include_router(commands.router)
@@ -97,6 +97,13 @@ async def run_webhook(bot: Bot, dp: Dispatcher, logger: logging.Logger) -> None:
     logger.info(f"Режим: WEBHOOK")
     logger.info(f"Webhook URL: {WEBHOOK_URL}")
     logger.info(f"Внутренний порт aiohttp: {WEBHOOK_INTERNAL_PORT}")
+
+    # Заменяем сессию бота на версию с жёстким таймаутом — защита от зависания
+    # при вызове set_webhook / get_webhook_info в продакшн-контейнере.
+    # Делаем это здесь, а не в _make_bot_and_dp(), чтобы не сломать
+    # polling-режим (aiogram там делает int(bot.session.timeout)).
+    await bot.session.close()
+    bot.session = AiohttpSession(timeout=15)  # numeric, not ClientTimeout
 
     # Регистрируем webhook в Telegram (нефатально — продолжаем даже при ошибке,
     # чтобы aiohttp-сервер всё равно стартовал и принимал уже настроенный webhook)
