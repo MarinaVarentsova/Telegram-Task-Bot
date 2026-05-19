@@ -25,6 +25,19 @@ TELEGRAM_BOT_TOKEN: str = _require("TELEGRAM_BOT_TOKEN")
 # URL веб-приложения (бэклог). Необязательный — если не задан, кнопка сообщает об этом.
 APP_URL: str = os.getenv("APP_URL", "").strip()
 
+# ── Режим работы бота ──────────────────────────────────────────────────────────
+# "polling"  — локальная/дев-разработка (по умолчанию)
+# "webhook"  — продакшн: Telegram шлёт апдейты на WEBHOOK_URL
+BOT_MODE: str = os.getenv("BOT_MODE", "polling").strip().lower()
+
+# Публичный URL, на который Telegram будет слать апдейты (только для webhook-режима).
+# Пример: https://telegram-task-bot.replit.app/api/telegram-webhook
+WEBHOOK_URL: str = os.getenv("WEBHOOK_URL", "").strip()
+
+# Внутренний порт aiohttp-сервера бота (только для webhook-режима).
+# Express проксирует на localhost:WEBHOOK_INTERNAL_PORT
+WEBHOOK_INTERNAL_PORT: int = int(os.getenv("WEBHOOK_INTERNAL_PORT", "8082"))
+
 # Модели AI
 TRANSCRIPTION_MODEL: str = "gpt-4o-mini-transcribe"
 EXTRACTION_MODEL: str = "gpt-5-mini"
