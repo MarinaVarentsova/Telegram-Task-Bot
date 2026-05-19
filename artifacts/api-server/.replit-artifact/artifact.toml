@@ -21,9 +21,11 @@ args = ["pnpm", "--filter", "@workspace/api-server", "run", "build"]
 NODE_ENV = "production"
 
 [services.production.run]
-# start-production.sh starts BOTH the Python bot (port 8082) and Express (PORT),
-# monitors both, and exits loudly if either crashes so Replit can restart.
-args = ["bash", "start-production.sh"]
+# Express starts, then spawns the Python bot as a child process when
+# BOT_MODE=webhook and internal port 8082 is free (not occupied by
+# the workspace "Telegram Bot" workflow).
+# Python stdout/stderr are piped through Express so they appear in logs.
+args = ["node", "--enable-source-maps", "artifacts/api-server/dist/index.mjs"]
 
 [services.production.run.env]
 PORT = "8080"
