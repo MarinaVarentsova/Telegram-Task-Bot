@@ -3,10 +3,16 @@
 """
 
 import logging
+import os
 from aiogram import Router, F
 from aiogram.filters import Command, CommandObject
-from aiogram.types import Message
+from aiogram.types import Message, FSInputFile
 from config import APP_URL
+
+# handlers/commands.py lives at  bot/handlers/commands.py
+# dirname twice  →  bot/
+_BOT_DIR = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
+_KANBAN_GIF = os.path.join(_BOT_DIR, "assets", "kanban_animation.gif")
 from database import (
     get_or_create_user,
     get_user_by_telegram_id,
@@ -53,6 +59,8 @@ async def cmd_start(message: Message) -> None:
             "Создайте задачу голосом или текстом, а бэклог смотрите на доске.",
             reply_markup=main_keyboard(),
         )
+        if os.path.isfile(_KANBAN_GIF):
+            await message.answer_animation(FSInputFile(_KANBAN_GIF))
     except Exception as e:
         logger.error(f"Ошибка в /start для {user.id}: {e}")
         await message.answer("Произошла ошибка при регистрации. Попробуйте позже.")
