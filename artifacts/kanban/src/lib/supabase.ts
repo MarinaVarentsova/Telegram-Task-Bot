@@ -9,7 +9,10 @@
  * The backend resolves:  telegram_id → tg_users.id (UUID) → tg_tasks.user_id
  */
 
-const BASE = "/api/kanban";
+// On Replit the proxy rewrites relative paths correctly.
+// On Vercel (or any external host) set VITE_API_BASE_URL=https://telegram-task-bot.replit.app/api/kanban
+const BASE =
+  (import.meta.env["VITE_API_BASE_URL"] as string | undefined) ?? "/api/kanban";
 
 /** Typed error thrown when the user is not found in tg_users. */
 export class UserNotFoundError extends Error {
