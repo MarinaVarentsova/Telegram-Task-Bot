@@ -285,3 +285,53 @@ async def change_task_category(task_id: int, category_id: int) -> bool:
 async def mark_task_done(task_id: int, done_column_id: int) -> bool:
     """Перемещает задачу в колонку 'выполнено'."""
     return await move_task_to_column(task_id, done_column_id)
+
+
+# ─── Напоминания ───────────────────────────────────────────────────────────────
+
+async def get_user_by_id(user_id: str) -> Optional[dict]:
+    """Получает запись tg_users по UUID id."""
+    async with httpx.AsyncClient() as client:
+        response = await client.get(
+            f"{_base_url()}/tg_users",
+            headers=_get_headers(prefer=""),
+            params={"id": f"eq.{user_id}", "limit": "1"},
+        )
+        response.raise_for_status()
+        data = response.json()
+        return data[0] if data else None
+
+
+async def get_tasks_due_tomorrow() -> list[dict]:
+    """
+    Возвращает все активные задачи, срок которых наступает завтра.
+
+    Использует диапазон дат (gte + lt), чтобы корректно обрабатывать
+    как поля типа date, так и timestamp with time zone.
+
+    Каждый элемент уже содержит вложенный объект tg_categories(name).
+    Для получения telegram_id вызовите get_user_by_id(task['user_id']).
+    """
+    from datetime import date, timedelta
+
+    tomorrow   = date.today() + timedelta(days=1)
+    day_after  = tomorrow + timedelta(days=1)
+
+    # httpx принимает list of tuples для нескольких значений одного ключа
+    params = [
+        ("deadline", f"gte.{tomorrow.isoformat()}"),
+        ("deadline", f"lt.{day_after.isoformat()}"),
+        ("status",   "eq.active"),
+        ("select",   "*, tg_categories(name)"),
+    ]
+
+    async with httpx.AsyncClient() as client:
+        response = await client.get(
+            f"{_base_url()}/tg_tasks",
+            headers=_get_headers(prefer=""),
+            params=params,
+        )
+        response.raise_for_status()
+        tasks = response.json() or []
+        logger.info(f"get_tasks_due_tomorrow: deadline={tomorrow}, найдено {len(tasks)} задач")
+        return tasks

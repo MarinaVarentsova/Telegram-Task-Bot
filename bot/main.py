@@ -23,6 +23,7 @@ from config import (
 )
 from database import log_startup_check
 from handlers import commands, messages
+from services.reminder_service import reminder_scheduler
 
 
 def setup_logging() -> None:
@@ -54,12 +55,14 @@ def _make_bot_and_dp() -> tuple[Bot, Dispatcher]:
 async def run_polling(bot: Bot, dp: Dispatcher, logger: logging.Logger) -> None:
     """Запускает бота в режиме polling (для локальной разработки)."""
     logger.info("Режим: POLLING — бот сам опрашивает Telegram API")
+    scheduler_task = asyncio.create_task(reminder_scheduler(bot))
     try:
         await dp.start_polling(bot, skip_updates=True)
     except Exception as e:
         logger.error(f"Критическая ошибка в polling: {e}")
         raise
     finally:
+        scheduler_task.cancel()
         await bot.session.close()
         logger.info("Бот (polling) остановлен.")
 
@@ -108,12 +111,15 @@ async def run_webhook(bot: Bot, dp: Dispatcher, logger: logging.Logger) -> None:
     try:
         await site.start()
         logger.info(f"aiohttp webhook-сервер запущен на 127.0.0.1:{WEBHOOK_INTERNAL_PORT}")
+        scheduler_task = asyncio.create_task(reminder_scheduler(bot))
+        logger.info("Reminder scheduler запущен")
         # Бесконечно ждём (апдейты обрабатываются через aiohttp)
         await asyncio.Event().wait()
     except Exception as e:
         logger.error(f"Критическая ошибка в webhook-сервере: {e}")
         raise
     finally:
+        scheduler_task.cancel()
         await runner.cleanup()
         try:
             await bot.delete_webhook()
